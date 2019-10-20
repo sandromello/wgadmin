@@ -29,7 +29,7 @@ type Client interface {
 	WireguardClientConfig() WireguardClientConfig
 	WireguardServerConfig() WireguardServerConfig
 	Peer() Peer
-	SyncGCS() error
+	SyncRemote() error
 	Close() error
 }
 
@@ -59,7 +59,11 @@ func (c *coreClient) Close() error {
 	return c.peer.store.Close()
 }
 
-func (c *coreClient) SyncGCS() error {
+func (c *coreClient) SyncRemote() error {
+	// don't sync if the store isn't remote
+	if !c.peer.store.IsRemote {
+		return nil
+	}
 	dbfile := c.peer.store.Path()
 	if err := c.Close(); err != nil {
 		return err
@@ -94,7 +98,7 @@ func (c *coreClient) SyncGCS() error {
 }
 
 // New initializes the store or returns an error
-func New(dbfile, bucket string, opts *bolt.Options) (Client, error) {
+func New(dbfile string, opts *bolt.Options) (Client, error) {
 	db, err := store.New(dbfile, bucketName, opts)
 	if err != nil {
 		return nil, err
@@ -117,7 +121,7 @@ func New(dbfile, bucket string, opts *bolt.Options) (Client, error) {
 
 // NewOrDie initializes the store or die (panic)
 func NewOrDie(dbfile, bucket string, opts *bolt.Options) Client {
-	c, err := New(dbfile, bucket, opts)
+	c, err := New(dbfile, opts)
 	if err != nil {
 		panic(err)
 	}
@@ -132,14 +136,12 @@ func getBucketEnvName() (string, error) {
 	return gcsBucketName, nil
 }
 
-func fetchFromGCS(path string, flag int, mode os.FileMode) (*os.File, error) {
-	d := time.Now().Add(10 * time.Second)
-	ctx, cancel := context.WithDeadline(context.Background(), d)
-	defer cancel()
-
+// FetchFromGCS fetch store from GCS, it must be passed as function in bolt.Options.OpenFile
+func FetchFromGCS(path string, flag int, mode os.FileMode) (*os.File, error) {
+	ctx := context.Background()
 	creds, err := google.FindDefaultCredentials(ctx, storage.ScopeReadOnly)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	storageClient, err := storage.NewClient(ctx, option.WithCredentials(creds))
 	if err != nil {
@@ -149,9 +151,12 @@ func fetchFromGCS(path string, flag int, mode os.FileMode) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	rc, err := storageClient.Bucket(gcsBucketName).
-		Object(store.DBFileName).
-		NewReader(ctx)
+	// Check if the bucket exists
+	b := storageClient.Bucket(gcsBucketName)
+	if _, err := b.Attrs(ctx); err != nil {
+		return nil, err
+	}
+	rc, err := b.Object(store.DBFileName).NewReader(ctx)
 	if err != nil && strings.Contains(err.Error(), "object doesn't exist") {
 		return os.Create(path)
 	}
@@ -170,5 +175,5 @@ func fetchFromGCS(path string, flag int, mode os.FileMode) (*os.File, error) {
 
 // NewGCS initializes the store from a Google Cloud Storage bucket
 func NewGCS(dbfile string) (Client, error) {
-	return New(dbfile, "", &bolt.Options{OpenFile: fetchFromGCS})
+	return New(dbfile, &bolt.Options{OpenFile: FetchFromGCS})
 }

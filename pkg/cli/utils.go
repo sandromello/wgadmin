@@ -47,9 +47,13 @@ func getDeltaDuration(startTime, endTime string) string {
 	return d.String()
 }
 
-func CreateConfigPath(cmd *cobra.Command, args []string) error {
-	if _, err := os.Stat(WGAppConfigPath); !os.IsNotExist(err) {
+// PersistentPreRunE will execute on every subcommand call
+func PersistentPreRunE(cmd *cobra.Command, args []string) error {
+	if O.Local {
+		GlobalBoltOptions = InitEmptyBoltOptions()
+	}
+	if _, err := os.Stat(GlobalWGAppConfigPath); !os.IsNotExist(err) {
 		return nil
 	}
-	return os.Mkdir(WGAppConfigPath, 0755)
+	return os.Mkdir(GlobalWGAppConfigPath, 0755)
 }

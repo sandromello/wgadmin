@@ -21,7 +21,7 @@ func ListServer() *cobra.Command {
 		Short:        "List wireguard servers configs.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := storeclient.NewGCS(DBFile)
+			client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
 			if err != nil {
 				return err
 			}
@@ -57,7 +57,6 @@ func ListServer() *cobra.Command {
 	return cmd
 }
 
-// TODO: test it !
 // DeleteServer removes a wireguard server config
 func DeleteServer() *cobra.Command {
 	cmd := &cobra.Command{
@@ -71,9 +70,14 @@ func DeleteServer() *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := storeclient.NewOrDie(DBFile, "", nil).
-				WireguardServerConfig().
-				Delete(args[0]); err != nil {
+			client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
+			if err != nil {
+				return err
+			}
+			if err := client.WireguardServerConfig().Delete(args[0]); err != nil {
+				return err
+			}
+			if err := client.SyncRemote(); err != nil {
 				return err
 			}
 			fmt.Printf("wireguard server %q removed!\n", args[0])
@@ -96,21 +100,21 @@ func InitServer() *cobra.Command {
 			return nil
 		},
 		PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-			fi, err := os.Stat(WGAppConfigPath)
+			fi, err := os.Stat(GlobalWGAppConfigPath)
 			if os.IsNotExist(err) {
-				if err := os.MkdirAll(WGAppConfigPath, 0744); err != nil {
+				if err := os.MkdirAll(GlobalWGAppConfigPath, 0744); err != nil {
 					return err
 				}
 				return nil
 			}
 			if !fi.Mode().IsDir() {
-				return fmt.Errorf("wgapp config path %q is a file", WGAppConfigPath)
+				return fmt.Errorf("wgapp config path %q is a file", GlobalWGAppConfigPath)
 			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			wgenv := args[0]
-			client, err := storeclient.NewGCS(DBFile)
+			client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
 			if err != nil {
 				return err
 			}
@@ -142,7 +146,6 @@ func InitServer() *cobra.Command {
 				ListenPort:     O.Server.ListenPort,
 				PrivateKey:     &privKey,
 				PostUp: []string{
-					"# https://github.com/StreisandEffect/streisand/issues/1089#issuecomment-350400689",
 					"ip link set mtu 1500 dev ens4",
 					"ip link set mtu 1500 dev %i",
 
@@ -162,7 +165,7 @@ func InitServer() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed creating wireguard server config: %v", err)
 			}
-			return client.SyncGCS()
+			return client.SyncRemote()
 		},
 	}
 	cmd.Flags().StringVar(&O.Server.Address, "address", "192.168.180.1/32", "The address of wireguard server config.")

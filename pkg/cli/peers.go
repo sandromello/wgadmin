@@ -36,8 +36,8 @@ func generateRandomString(n int) (string, error) {
 
 // TODO: add function to generate a random ip address from the wireguard server network
 
-// PeerAdd add a new peer
-func PeerAdd() *cobra.Command {
+// PeerAddCmd add a new peer
+func PeerAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "add SERVER/PEER",
 		Short:        "Add a new peer to a wireguard server config.",
@@ -52,7 +52,7 @@ func PeerAdd() *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := storeclient.NewGCS(DBFile)
+			client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
 			if err != nil {
 				return err
 			}
@@ -80,14 +80,15 @@ func PeerAdd() *cobra.Command {
 				}); err != nil {
 					return err
 				}
-				fmt.Printf("%s/peers/%s\n", O.Peer.PublicAddressURL, randomSecret)
+				wgenv := strings.Split(args[0], "/")[0]
+				fmt.Printf("%s/peers/%s?vpn=%s\n", O.Peer.PublicAddressURL, randomSecret, wgenv)
 			} else if err != nil {
 				// failed veryfing if peer exists
 				return fmt.Errorf("failed fetching peer: %v", err)
 			} else if p != nil {
 				return fmt.Errorf("peer already exists: %v", p.UID)
 			}
-			return client.SyncGCS()
+			return client.SyncRemote()
 		},
 	}
 	cmd.Flags().StringVar(&O.Peer.PublicAddressURL, "public-address", "http://127.0.0.1", "The public address that will be used to download the wireguard client config.")
@@ -96,7 +97,7 @@ func PeerAdd() *cobra.Command {
 	return cmd
 }
 
-func PeerInfo() *cobra.Command {
+func PeerInfoCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "info PEER",
 		Short:        "Get information about a specific peer.",
@@ -108,7 +109,7 @@ func PeerInfo() *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := storeclient.NewGCS(DBFile)
+			client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
 			if err != nil {
 				return err
 			}
@@ -149,7 +150,7 @@ func PeerInfo() *cobra.Command {
 	return cmd
 }
 
-func PeerSetStatus() *cobra.Command {
+func PeerSetStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set-status PEER [initial|active|blocked]",
 		Short: "Set the status for a peer.",
@@ -175,7 +176,7 @@ active: The user has dowloaded the client configuration and it's ready to establ
 			default:
 				return fmt.Errorf("wrong peer status %q", peerStatus)
 			}
-			client, err := storeclient.NewGCS(DBFile)
+			client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
 			if err != nil {
 				return err
 			}
@@ -202,20 +203,20 @@ active: The user has dowloaded the client configuration and it's ready to establ
 				return err
 			}
 			defer fmt.Printf("peer %q blocked!\n", peer.UID)
-			return client.SyncGCS()
+			return client.SyncRemote()
 		},
 	}
 	cmd.Flags().BoolVar(&O.JSONFormat, "json", false, "Print the output in JSON format.")
 	return cmd
 }
 
-func PeerList() *cobra.Command {
+func PeerListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "list [SERVER]",
 		Short:        "List peers from a given server.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := storeclient.NewGCS(DBFile)
+			client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
 			if err != nil {
 				return err
 			}

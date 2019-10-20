@@ -21,14 +21,14 @@ AllowedIPs = {{ .AllowedIPs }}
 {{ end }}`)
 
 var templateWireguardClientConfig = []byte(`[Interface]
-PrivateKey = {{ .InterfaceClientConfig.PrivateKey.String }}
-Address    = {{ .InterfaceClientConfig.Address }}
-DNS        = {{ .InterfaceClientConfig.ParseDNSToComma }}
+PrivateKey = {{ .PrivateKey.String }}
+Address    = {{ .Address }}
+DNS        = {{ .DNS }}
+MTU        = 1360
 
 [Peer]
-PublicKey  = {{ .PeerClientConfig.PublicKey }}
-AllowedIPs = {{ .PeerClientConfig.ParseAllowedIPsToComma }}
-Endpoint   = {{ .PeerClientConfig.Endpoint }}
-
-PersistentKeepalive = {{ .PeerClientConfig.PersistentKeepAlive }}
+PublicKey           = {{ .PublicKey.String }}
+AllowedIPs          = {{ .AllowedIPs }}
+Endpoint            = {{ .Endpoint }}
+PersistentKeepalive = 25
 `)

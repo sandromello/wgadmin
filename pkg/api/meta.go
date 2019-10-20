@@ -176,8 +176,17 @@ func (w *WireguardServerConfig) WriteToIniFile(filePath string) error {
 	return HandleTemplates(string(templateWireguardServerConfig), f, w)
 }
 
+// ParseWireguardServerConfigTemplate parse to []byte the wireguard server config template
+func (w *WireguardServerConfig) ParseWireguardServerConfigTemplate() ([]byte, error) {
+	var buf bytes.Buffer
+	if err := HandleTemplates(string(templateWireguardServerConfig), &buf, w); err != nil {
+		return nil, fmt.Errorf("failed parsing template: %v", err)
+	}
+	return buf.Bytes(), nil
+}
+
 // ParseWireguardClientConfigTemplate parse to []byte the wireguard client config template
-func ParseWireguardClientConfigTemplate(obj *WireguardClientConfig) ([]byte, error) {
+func ParseWireguardClientConfigTemplate(obj map[string]interface{}) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := HandleTemplates(string(templateWireguardClientConfig), &buf, obj); err != nil {
 		return nil, fmt.Errorf("failed parsing template: %v", err)

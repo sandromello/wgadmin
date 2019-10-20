@@ -1,53 +1,21 @@
-package main
+package cli
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/sandromello/wgadmin/pkg/api"
-	"github.com/sandromello/wgadmin/pkg/cli"
 	storeclient "github.com/sandromello/wgadmin/pkg/store/client"
+	"github.com/spf13/cobra"
 )
-
-var templateWireguardClientConfig = []byte(`[Interface]
-PrivateKey = {{ .PrivateKey.String }}
-Address    = {{ .Address }}
-DNS        = {{ .DNS }}
-MTU        = 1360
-
-[Peer]
-PublicKey           = {{ .PublicKey.String }}
-AllowedIPs          = {{ .AllowedIPs }}
-Endpoint            = {{ .Endpoint }}
-PersistentKeepalive = 25
-`)
-
-func main() {
-	http.HandleFunc("/peers/", configurePeerHandler)
-	port := os.Getenv("HTTP_PORT")
-	if port == "" {
-		port = "8000"
-	}
-	if err := cli.CreateConfigPath(nil, nil); err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
-	log.Printf("Starting server at :%s", port)
-
-	if err := http.ListenAndServe(fmt.Sprintf(":%s", port), nil); err != nil {
-		fmt.Println(err)
-	}
-}
 
 func configurePeerHandler(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 	vpn := r.URL.Query().Get("vpn")
-	client, err := storeclient.NewGCS(cli.DBFile)
+	client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -91,21 +59,26 @@ func configurePeerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	wgsc, err := client.WireguardServerConfig().Get(vpn)
-	if wgsc == nil || err != nil {
+	if wgsc == nil && err == nil {
+		msg := fmt.Sprintf("Error: the wireguard server %q doesn't exists", vpn)
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+	if err != nil {
 		msg := fmt.Sprintf("Error: failed retrieving wireguard server config object: %v", err)
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
 
-	var buf bytes.Buffer
-	if err := api.HandleTemplates(string(templateWireguardClientConfig), &buf, map[string]interface{}{
+	data, err := api.ParseWireguardClientConfigTemplate(map[string]interface{}{
 		"PrivateKey": clientPrivkey,
 		"PublicKey":  wgsc.PrivateKey.PublicKey(),
 		"Address":    peer.AllowedIPs.String(),
 		"DNS":        "1.1.1.1, 8.8.8.8",
 		"Endpoint":   wgsc.PublicEndpoint,
 		"AllowedIPs": "0.0.0.0/0, ::/0",
-	}); err != nil {
+	})
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -120,7 +93,7 @@ func configurePeerHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
-	if err := client.SyncGCS(); err != nil {
+	if err := client.SyncRemote(); err != nil {
 		msg := fmt.Sprintf("Error: failed syncing with GCS: %v", err)
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
@@ -128,5 +101,22 @@ func configurePeerHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
-	fmt.Fprintf(w, buf.String())
+	fmt.Fprintf(w, string(data))
+}
+
+// RunWebServerCmd start the webserver
+func RunWebServerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "run-server",
+		Short:             "Run the client configuration generator webserver.",
+		PersistentPreRunE: PersistentPreRunE,
+		SilenceUsage:      true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			http.HandleFunc("/peers/", configurePeerHandler)
+			log.Printf("Starting the webserver at :%s ...", O.WebServer.HTTPPort)
+			return http.ListenAndServe(fmt.Sprintf(":%s", O.WebServer.HTTPPort), nil)
+		},
+	}
+	cmd.Flags().StringVar(&O.WebServer.HTTPPort, "port", "8000", "The port of the server.")
+	return cmd
 }
