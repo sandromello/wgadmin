@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	wgserverPrefix string = "/wgsconfig"
-	wgclientPrefix string = "/wgcconfig"
-	peerPrefix     string = "/peers"
-	bucketName     string = "wireguard"
+	wgserverPrefix      string = "/wgsconfig"
+	wgclientPrefix      string = "/wgcconfig"
+	peerPrefix          string = "/peers"
+	bucketName          string = "wireguard"
+	gcsTimeoutInSeconds        = 10
 )
 
 // Client objects to interact with store
@@ -138,7 +139,7 @@ func getBucketEnvName() (string, error) {
 
 // FetchFromGCS fetch store from GCS, it must be passed as function in bolt.Options.OpenFile
 func FetchFromGCS(path string, flag int, mode os.FileMode) (*os.File, error) {
-	ctx := context.Background()
+	ctx, _ := context.WithTimeout(context.Background(), gcsTimeoutInSeconds*time.Second)
 	creds, err := google.FindDefaultCredentials(ctx, storage.ScopeReadOnly)
 	if err != nil {
 		return nil, err

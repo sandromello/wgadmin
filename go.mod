@@ -5,6 +5,8 @@ go 1.12
 require (
 	cloud.google.com/go/storage v1.1.1
 	github.com/google/go-cmp v0.3.0
+	github.com/google/uuid v1.1.1
+	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.5
 	go.etcd.io/bbolt v1.3.3
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550

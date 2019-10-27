@@ -42,6 +42,10 @@ type CmdOptions struct {
 	WebServer CmdWebServer
 }
 
+const (
+	cmdTimeoutInSeconds = 2
+)
+
 var (
 	O CmdOptions
 

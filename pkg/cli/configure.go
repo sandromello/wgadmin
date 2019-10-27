@@ -9,7 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	storeclient "github.com/sandromello/wgadmin/pkg/store/client"
+	"github.com/sandromello/wgadmin/pkg/wgtools"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -19,34 +22,76 @@ func hashFromByte(data []byte) string {
 	return string(s.Sum(nil))
 }
 
-func configureServer(server, configFile string) error {
+func fetchState(server, configFile string) ([]byte, []byte, error) {
 	localConfigData, err := ioutil.ReadFile(configFile)
 	if err != nil && !os.IsNotExist(err) {
-		return err
+		return nil, nil, err
 	}
+	// TODO: set a timeout when opening: bolt.Options{Timeout: Duration}
 	client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
+	defer client.Close()
 	wgsc, err := client.WireguardServerConfig().Get(server)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	if wgsc == nil {
-		return fmt.Errorf("wireguard server %q not found", server)
+		return nil, nil, fmt.Errorf("wireguard server %q not found", server)
 	}
 	remoteConfigData, err := wgsc.ParseWireguardServerConfigTemplate()
+	return localConfigData, remoteConfigData, err
+}
+
+func checkDirty(configFile string) (isDirty bool, errMsg error) {
+	dirtyFile := fmt.Sprintf("%s.dirty", configFile)
+	isDirty = true
+	if _, err := os.Stat(dirtyFile); err != nil {
+		if os.IsNotExist(err) {
+			isDirty = false
+		} else {
+			errMsg = fmt.Errorf("failed reading dirty file state: %v", err)
+		}
+	}
+	return
+}
+
+func setDirty(isDirty bool, configFile string) (errMsg error) {
+	dirtyFile := fmt.Sprintf("%s.dirty", configFile)
+	if isDirty {
+		if err := ioutil.WriteFile(dirtyFile, []byte(``), 0744); err != nil {
+			errMsg = fmt.Errorf("failed creating the dirty file state: %v", err)
+		}
+		return errMsg
+	}
+	if err := os.Remove(dirtyFile); err != nil {
+		errMsg = fmt.Errorf("failed removing the dirty file state: %v", err)
+	}
+	return errMsg
+}
+
+func conciliateState(configFile string, data []byte) ([]byte, error) {
+	if err := setDirty(true, configFile); err != nil {
+		return nil, err
+	}
+	isRoot, err := wgtools.IsRootUser()
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed veryfing the current user: %v", err)
 	}
-	if hashFromByte(localConfigData) != hashFromByte(remoteConfigData) {
-		fmt.Println("local state has changed, reconfiguring server ...")
-		// TODO: overwrite the destination configuration with the remote config
-		// TODO: wgtools.wgQuickDown() - to turn off the interface
-		// TODO: wgtools.wgQuickUP() - to turn on the interface
+	if !isRoot {
+		return nil, fmt.Errorf("must be run as root user")
 	}
-	fmt.Println("LOCAL == REMOTE:", hashFromByte(localConfigData) == hashFromByte(remoteConfigData))
-	return client.SyncRemote()
+	// TODO: overwrite the destination configuration with the remote config
+	if err := ioutil.WriteFile(configFile, data, 0700); err != nil {
+		return nil, err
+	}
+	wgtools.WGQuickDown(configFile)
+	stdout, err := wgtools.WGQuickUP(configFile)
+	if err != nil {
+		return stdout, err
+	}
+	return stdout, setDirty(false, configFile)
 }
 
 // ConfigureServerCmd configure a wireguard server command
@@ -62,27 +107,51 @@ func ConfigureServerCmd() *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			isControlLoop := O.Configure.Sync != time.Duration(0)
 			for {
+				now := time.Now().UTC()
+				logf := log.WithField("job", uuid.New().String()[:6])
 				errCh := make(chan error, 1)
+				stopC := make(chan struct{})
+
 				go func() {
-					errCh <- configureServer(args[0], O.Configure.ConfigFile)
+					logf.Infof("Configuring server %s ...", args[0])
+					defer close(stopC)
+
+					localData, remoteData, err := fetchState(args[0], O.Configure.ConfigFile)
+					if err != nil {
+						errCh <- err
+					}
+					isDirty, err := checkDirty(O.Configure.ConfigFile)
+					if err != nil {
+						errCh <- err
+					}
+					isConciliateOperation := hashFromByte(localData) != hashFromByte(remoteData)
+					logf.Debugf("dirty=%v, conciliate=%v", isDirty, isConciliateOperation)
+					if isConciliateOperation || isDirty {
+						stdout, err := conciliateState(O.Configure.ConfigFile, remoteData)
+						if err != nil {
+							errCh <- err
+						}
+						logf.Debug(string(stdout))
+					}
 				}()
+
 				select {
+				case <-stopC:
+					logf.Infof("Done in %vs\n", time.Since(now).Seconds())
 				case err := <-errCh:
-					isControlLoop := O.Configure.Sync != time.Duration(0)
 					if err != nil {
 						if !isControlLoop {
 							return err
 						}
-						fmt.Println(err.Error())
+						logf.Error(err.Error())
 					}
-					if !isControlLoop {
-						return nil
-					}
-					time.Sleep(O.Configure.Sync)
-				case <-time.After(5 * time.Second):
-					return fmt.Errorf("timeout")
 				}
+				if !isControlLoop {
+					return nil
+				}
+				time.Sleep(O.Configure.Sync)
 			}
 		},
 	}
