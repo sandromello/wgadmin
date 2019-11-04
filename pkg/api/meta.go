@@ -55,6 +55,23 @@ func (k *Key) UnmarshalJSON(data []byte) error {
 	return err
 }
 
+// PublicKeyString return the public key from a peer,
+// returns an empty string if it's empty
+func (p *Peer) PublicKeyString() string {
+	if p.PublicKey == nil {
+		return ""
+	}
+	return p.PublicKey.String()
+}
+
+// GetStatus get the status of a peer
+func (p *Peer) GetStatus() string {
+	if p.Status == PeerStatusInitial {
+		return "initial"
+	}
+	return string(p.Status)
+}
+
 // ParseDNSToComma parses the DNS config to a comma for each entry
 func (i InterfaceClientConfig) ParseDNSToComma() string {
 	var dnss []string

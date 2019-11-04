@@ -202,7 +202,7 @@ active: The user has dowloaded the client configuration and it's ready to establ
 			if err := client.Peer().Update(peer); err != nil {
 				return err
 			}
-			defer fmt.Printf("peer %q blocked!\n", peer.UID)
+			defer fmt.Printf("peer %q in %s state!\n", peer.UID, peer.GetStatus())
 			return client.SyncRemote()
 		},
 	}

@@ -14,6 +14,8 @@ type CmdServer struct {
 	Address        string
 	ListenPort     int
 	PublicEndpoint string
+	InterfaceName  string
+	Override       bool
 }
 
 type CmdPeer struct {
@@ -23,8 +25,9 @@ type CmdPeer struct {
 }
 
 type CmdConfigure struct {
-	ConfigFile string
-	Sync       time.Duration
+	ConfigFile    string
+	InterfaceName string
+	Sync          time.Duration
 }
 
 type CmdWebServer struct {

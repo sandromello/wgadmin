@@ -18,6 +18,7 @@ type Peer interface {
 	Delete(name string) error
 	List() ([]api.Peer, error)
 	ListByServer(prefix string) ([]api.Peer, error)
+	SearchByPubKey(server, pubkey string) (*api.Peer, error)
 }
 
 type peer struct {
@@ -37,6 +38,27 @@ func (c *peer) Get(name string) (*api.Peer, error) {
 	}
 	var obj api.Peer
 	return &obj, json.Unmarshal(data, &obj)
+}
+
+// SearchByPubKey find a peer by its public key
+func (c *peer) SearchByPubKey(server, pubKey string) (*api.Peer, error) {
+	_, err := api.ParseKey(pubKey)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pubkey, %v", err)
+	}
+	peerList, err := c.ListByServer(server)
+	if err != nil {
+		return nil, err
+	}
+	for _, peer := range peerList {
+		if peer.Status != api.PeerStatusActive {
+			continue
+		}
+		if peer.PublicKeyString() == pubKey {
+			return &peer, nil
+		}
+	}
+	return nil, nil
 }
 
 // Update create or update a peer in the store

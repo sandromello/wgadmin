@@ -61,6 +61,8 @@ func main() {
 		cli.DeleteServer(),
 	)
 	configure.AddCommand(
+		cli.ConfigureSystemdServerCmd(),
+		cli.ConfigureSystemdPeerCmd(),
 		cli.ConfigureServerCmd(),
 		cli.ConfigurePeersCmd(),
 	)

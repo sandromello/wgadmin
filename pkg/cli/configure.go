@@ -9,8 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sandromello/wgadmin/pkg/api"
+
 	"github.com/google/uuid"
 	storeclient "github.com/sandromello/wgadmin/pkg/store/client"
+	"github.com/sandromello/wgadmin/pkg/system/wgpeer"
+	"github.com/sandromello/wgadmin/pkg/system/wgserver"
 	"github.com/sandromello/wgadmin/pkg/wgtools"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -86,12 +90,43 @@ func conciliateState(configFile string, data []byte) ([]byte, error) {
 	if err := ioutil.WriteFile(configFile, data, 0700); err != nil {
 		return nil, err
 	}
+	// TODO: add vagrant for testing locally
 	wgtools.WGQuickDown(configFile)
 	stdout, err := wgtools.WGQuickUP(configFile)
 	if err != nil {
 		return stdout, err
 	}
 	return stdout, setDirty(false, configFile)
+}
+
+// ConfigureSystemdServerCmd configure the systemd for running
+// the wireguard server manager
+func ConfigureSystemdServerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "systemd-server",
+		Short:        "Configure Systemd for the Wireguard Server Manager.",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			wgserver.StopWireguardManager()
+			return wgserver.InstallWireguardManager()
+		},
+	}
+	return cmd
+}
+
+// ConfigureSystemdPeerCmd configure the systemd for running
+// the wireguard peer manager
+func ConfigureSystemdPeerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "systemd-peer",
+		Short:        "Configure Systemd for the Wireguard Peer Manager.",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			wgpeer.StopPeerManager()
+			return wgpeer.InstallPeerManager()
+		},
+	}
+	return cmd
 }
 
 // ConfigureServerCmd configure a wireguard server command
@@ -107,50 +142,39 @@ func ConfigureServerCmd() *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			conciliate := func(logf *log.Entry) error {
+				logf.Infof("Configuring server %s ...", args[0])
+				localData, remoteData, err := fetchState(args[0], O.Configure.ConfigFile)
+				if err != nil {
+					return err
+				}
+				isDirty, err := checkDirty(O.Configure.ConfigFile)
+				if err != nil {
+					return err
+				}
+				isConciliateOperation := hashFromByte(localData) != hashFromByte(remoteData)
+				logf.Infof("dirty=%v, conciliate=%v", isDirty, isConciliateOperation)
+				if isConciliateOperation || isDirty {
+					stdout, err := conciliateState(O.Configure.ConfigFile, remoteData)
+					if err != nil {
+						return fmt.Errorf("%v. %v", strings.TrimSuffix(string(stdout), "\n"), err)
+					}
+					logf.Debug(string(stdout))
+				}
+				return nil
+			}
+
 			isControlLoop := O.Configure.Sync != time.Duration(0)
 			for {
 				now := time.Now().UTC()
 				logf := log.WithField("job", uuid.New().String()[:6])
-				errCh := make(chan error, 1)
-				stopC := make(chan struct{})
-
-				go func() {
-					logf.Infof("Configuring server %s ...", args[0])
-					defer close(stopC)
-
-					localData, remoteData, err := fetchState(args[0], O.Configure.ConfigFile)
-					if err != nil {
-						errCh <- err
+				if err := conciliate(logf); err != nil {
+					if !isControlLoop {
+						return err
 					}
-					isDirty, err := checkDirty(O.Configure.ConfigFile)
-					if err != nil {
-						errCh <- err
-					}
-					isConciliateOperation := hashFromByte(localData) != hashFromByte(remoteData)
-					logf.Debugf("dirty=%v, conciliate=%v", isDirty, isConciliateOperation)
-					if isConciliateOperation || isDirty {
-						stdout, err := conciliateState(O.Configure.ConfigFile, remoteData)
-						if err != nil {
-							errCh <- err
-						}
-						logf.Debug(string(stdout))
-					}
-				}()
-
-				select {
-				case <-stopC:
-					logf.Infof("Done in %vs\n", time.Since(now).Seconds())
-				case err := <-errCh:
-					if err != nil {
-						if !isControlLoop {
-							return err
-						}
-						logf.Error(err.Error())
-					}
+					logf.Error(err)
 				}
-				if !isControlLoop {
-					return nil
-				}
+				logf.Infof("Completed in %vs\n", time.Since(now).Seconds())
 				time.Sleep(O.Configure.Sync)
 			}
 		},
@@ -163,27 +187,113 @@ func ConfigureServerCmd() *cobra.Command {
 // ConfigurePeersCmd configure peers command
 func ConfigurePeersCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "peer SERVER/PEER",
+		Use:          "peer SERVER",
 		Short:        "Configure the peers in a Wireguard Server.",
 		SilenceUsage: true,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				return errors.New("missing the resource name")
 			}
-			if !strings.Contains(args[0], "/") {
-				return errors.New("specify the resource name as <SERVER>/<PEER>")
-			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
-			if err != nil {
-				return err
+			iface := O.Configure.InterfaceName
+			conciliate := func(logf *log.Entry) error {
+				client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
+				if err != nil {
+					return err
+				}
+				defer client.Close()
+				// remove any revoked peers found in remote
+				desiredPeers, err := client.Peer().ListByServer(args[0])
+				if err != nil {
+					return fmt.Errorf("failed listing peers: %v", err)
+				}
+				dirty := 0
+				for _, peer := range desiredPeers {
+					logf.Debugf("op=revoke, peer=%v, status=%v", peer.UID, peer.GetStatus())
+					if peer.Status == api.PeerStatusBlocked {
+						logf.Infof("Removing revoked peer %v", peer.UID)
+						stdout, err := wgtools.WGRemovePeer(iface, peer.PublicKeyString())
+						if err != nil {
+							msg := fmt.Sprintf("%v. %v", strings.TrimSuffix(string(stdout), "\n"), err)
+							logf.Error(msg)
+							dirty++
+						}
+					}
+				}
+				// check if the current peers is consistent with the remote state
+				currentPeers, err := wgtools.WGShowPeers(iface)
+				if err != nil {
+					return fmt.Errorf("failed listing wireguard peers: %v", err)
+				}
+				for _, pubkey := range currentPeers {
+					logf.Debugf("op=conciliate, peer=%s", pubkey)
+					cur, err := client.Peer().SearchByPubKey(args[0], pubkey)
+					if err != nil {
+						return fmt.Errorf("failed retrieving peer from store: %v", err)
+					}
+					if cur == nil {
+						logf.Infof("Removing local peer %s", pubkey)
+						stdout, err := wgtools.WGRemovePeer(iface, pubkey)
+						if err != nil {
+							msg := fmt.Sprintf("%v. %v", strings.TrimSuffix(string(stdout), "\n"), err)
+							logf.Error(msg)
+							dirty++
+						}
+					}
+				}
+
+				currentPeers, err = wgtools.WGShowPeers(iface)
+				if err != nil {
+					return fmt.Errorf("failed listing wireguard peers: %v", err)
+				}
+				// add peers if doesn't exists locally
+				for _, desired := range desiredPeers {
+					if desired.Status != api.PeerStatusActive {
+						continue
+					}
+					logf.Debugf("op=add, peer=%s, status=%v", desired.UID, desired.GetStatus())
+					exists := false
+					for _, curPubKey := range currentPeers {
+						if curPubKey == desired.PublicKeyString() {
+							exists = true
+							break
+						}
+					}
+					if !exists {
+						pubkey := desired.PublicKeyString()
+						logf.Debugf("Adding peer %v/%v", desired.UID, pubkey)
+						stdout, err := wgtools.WGAddPeer(iface, pubkey, desired.AllowedIPs.String())
+						if err != nil {
+							msg := fmt.Sprintf("%v. %v", strings.TrimSuffix(string(stdout), "\n"), err)
+							logf.Error(msg)
+							dirty++
+						}
+					}
+				}
+				logf.WithField("dirty", dirty).Infof("Found %v local and %v remote peers", len(currentPeers), len(desiredPeers))
+				return nil
 			}
-			return client.SyncRemote()
+			isControlLoop := O.Configure.Sync != time.Duration(0)
+			for {
+				now := time.Now().UTC()
+				logf := log.WithFields(map[string]interface{}{
+					"job":    uuid.New().String()[:6],
+					"server": args[0],
+				})
+				if err := conciliate(logf); err != nil {
+					if !isControlLoop {
+						return err
+					}
+					logf.Error(err)
+				}
+				logf.Infof("Completed in %vs", time.Since(now).Seconds())
+				time.Sleep(O.Configure.Sync)
+			}
 		},
 	}
-	cmd.Flags().StringVar(&O.Configure.ConfigFile, "config", "/etc/wireguard/conf.d/peers.conf", "The wireguard peers config file path.")
+	cmd.Flags().StringVar(&O.Configure.InterfaceName, "iface", "wg0", "The wireguard peers config file path.")
 	cmd.Flags().DurationVar(&O.Configure.Sync, "sync", time.Duration(0), "If enable will run a control loop watching the changes from remote.")
 	return cmd
 }
