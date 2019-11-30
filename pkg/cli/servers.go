@@ -21,7 +21,7 @@ func ListServer() *cobra.Command {
 		Short:        "List wireguard servers configs.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := storeclient.NewGCS(DBFile)
+			client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
 			if err != nil {
 				return err
 			}
@@ -57,7 +57,6 @@ func ListServer() *cobra.Command {
 	return cmd
 }
 
-// TODO: test it !
 // DeleteServer removes a wireguard server config
 func DeleteServer() *cobra.Command {
 	cmd := &cobra.Command{
@@ -71,9 +70,14 @@ func DeleteServer() *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := storeclient.NewOrDie(DBFile, "", nil).
-				WireguardServerConfig().
-				Delete(args[0]); err != nil {
+			client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
+			if err != nil {
+				return err
+			}
+			if err := client.WireguardServerConfig().Delete(args[0]); err != nil {
+				return err
+			}
+			if err := client.SyncRemote(); err != nil {
 				return err
 			}
 			fmt.Printf("wireguard server %q removed!\n", args[0])
@@ -96,21 +100,21 @@ func InitServer() *cobra.Command {
 			return nil
 		},
 		PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-			fi, err := os.Stat(WGAppConfigPath)
+			fi, err := os.Stat(GlobalWGAppConfigPath)
 			if os.IsNotExist(err) {
-				if err := os.MkdirAll(WGAppConfigPath, 0744); err != nil {
+				if err := os.MkdirAll(GlobalWGAppConfigPath, 0744); err != nil {
 					return err
 				}
 				return nil
 			}
 			if !fi.Mode().IsDir() {
-				return fmt.Errorf("wgapp config path %q is a file", WGAppConfigPath)
+				return fmt.Errorf("wgapp config path %q is a file", GlobalWGAppConfigPath)
 			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			wgenv := args[0]
-			client, err := storeclient.NewGCS(DBFile)
+			client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
 			if err != nil {
 				return err
 			}
@@ -118,7 +122,7 @@ func InitServer() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if wgsc != nil {
+			if wgsc != nil && !O.Server.Override {
 				return fmt.Errorf("wireguard server config %q already exists", wgsc.UID)
 			}
 			addr := api.ParseCIDR(O.Server.Address)
@@ -142,31 +146,32 @@ func InitServer() *cobra.Command {
 				ListenPort:     O.Server.ListenPort,
 				PrivateKey:     &privKey,
 				PostUp: []string{
-					"# https://github.com/StreisandEffect/streisand/issues/1089#issuecomment-350400689",
-					"ip link set mtu 1500 dev ens4",
-					"ip link set mtu 1500 dev %i",
+					// https://github.com/StreisandEffect/streisand/issues/1089#issuecomment-350400689
+					fmt.Sprintf("ip link set mtu 1360 dev %s", O.Server.InterfaceName),
+					"ip link set mtu 1360 dev %i",
 
 					"sysctl -w net.ipv4.ip_forward=1",
 					"sysctl -w net.ipv6.conf.all.forwarding=1",
 					"iptables -A FORWARD -o %i -j ACCEPT",
-					"iptables -t nat -A POSTROUTING -o ens4 -j MASQUERADE",
-					"wg addconf %i /etc/wireguard/conf.d/peers.conf",
+					fmt.Sprintf("iptables -t nat -A POSTROUTING -o %s -j MASQUERADE", O.Server.InterfaceName),
 				},
 				PostDown: []string{
 					"sysctl -w net.ipv4.ip_forward=0",
 					"sysctl -w net.ipv6.conf.all.forwarding=0",
 					"iptables -D FORWARD -o %i -j ACCEPT",
-					"iptables -t nat -D POSTROUTING -o ens4 -j MASQUERADE",
+					fmt.Sprintf("iptables -t nat -D POSTROUTING -o %s -j MASQUERADE", O.Server.InterfaceName),
 				},
 			})
 			if err != nil {
 				return fmt.Errorf("failed creating wireguard server config: %v", err)
 			}
-			return client.SyncGCS()
+			return client.SyncRemote()
 		},
 	}
+	cmd.Flags().StringVar(&O.Server.InterfaceName, "iface", "eth0", "The name of the interface which will be used to run scripts.")
 	cmd.Flags().StringVar(&O.Server.Address, "address", "192.168.180.1/32", "The address of wireguard server config.")
 	cmd.Flags().StringVar(&O.Server.PublicEndpoint, "endpoint", "", "The public [DNS|IP]:PORT for the wireguard server instance.")
+	cmd.Flags().BoolVar(&O.Server.Override, "override", false, "Override the current configuration.")
 	cmd.Flags().IntVar(&O.Server.ListenPort, "listen-port", 51820, "The listen port for the wireguard server.")
 	return cmd
 }

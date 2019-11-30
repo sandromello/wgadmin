@@ -1,6 +1,9 @@
 FROM ubuntu:bionic
 
 ENV DEBIAN_FRONTEND="noninteractive"
+# https://launchpad.net/ubuntu/+source/linux-gcp
+# get name from command `uname -r`
+ARG KERNEL_RELEASE
 
 RUN echo "deb http://archive.ubuntu.com/ubuntu/ bionic main" > /etc/apt/sources.list &&\
     echo "deb http://archive.ubuntu.com/ubuntu/ bionic-updates main" >> /etc/apt/sources.list &&\
@@ -14,7 +17,7 @@ RUN echo "deb http://ppa.launchpad.net/wireguard/wireguard/ubuntu bionic main" >
     echo "deb-src http://ppa.launchpad.net/wireguard/wireguard/ubuntu bionic main" >> /etc/apt/sources.list.d/wireguard.list &&\
     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E1B39B6EF6DDB96564797591AE33835F504A1A25 &&\
     apt-get update &&\
-    apt-get install --yes --no-install-recommends wireguard linux-headers-$(uname -r) &&\
+    apt-get install --yes --no-install-recommends wireguard linux-headers-${KERNEL_RELEASE} &&\
     apt-get clean && rm -rf /var/lib/apt/lists/* &&\
     dkms uninstall wireguard/$(dkms status | awk -F ', ' '{ print $2 }')
 

@@ -55,6 +55,23 @@ func (k *Key) UnmarshalJSON(data []byte) error {
 	return err
 }
 
+// PublicKeyString return the public key from a peer,
+// returns an empty string if it's empty
+func (p *Peer) PublicKeyString() string {
+	if p.PublicKey == nil {
+		return ""
+	}
+	return p.PublicKey.String()
+}
+
+// GetStatus get the status of a peer
+func (p *Peer) GetStatus() string {
+	if p.Status == PeerStatusInitial {
+		return "initial"
+	}
+	return string(p.Status)
+}
+
 // ParseDNSToComma parses the DNS config to a comma for each entry
 func (i InterfaceClientConfig) ParseDNSToComma() string {
 	var dnss []string
@@ -176,8 +193,17 @@ func (w *WireguardServerConfig) WriteToIniFile(filePath string) error {
 	return HandleTemplates(string(templateWireguardServerConfig), f, w)
 }
 
+// ParseWireguardServerConfigTemplate parse to []byte the wireguard server config template
+func (w *WireguardServerConfig) ParseWireguardServerConfigTemplate() ([]byte, error) {
+	var buf bytes.Buffer
+	if err := HandleTemplates(string(templateWireguardServerConfig), &buf, w); err != nil {
+		return nil, fmt.Errorf("failed parsing template: %v", err)
+	}
+	return buf.Bytes(), nil
+}
+
 // ParseWireguardClientConfigTemplate parse to []byte the wireguard client config template
-func ParseWireguardClientConfigTemplate(obj *WireguardClientConfig) ([]byte, error) {
+func ParseWireguardClientConfigTemplate(obj map[string]interface{}) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := HandleTemplates(string(templateWireguardClientConfig), &buf, obj); err != nil {
 		return nil, fmt.Errorf("failed parsing template: %v", err)

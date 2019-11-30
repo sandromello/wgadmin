@@ -15,8 +15,9 @@ type TransactionFn func(tx *bolt.Tx) error
 
 // Database holds a database connection
 type Database struct {
-	db     *bolt.DB
-	bucket string
+	db       *bolt.DB
+	bucket   string
+	IsRemote bool
 }
 
 // Close the connection with the database
@@ -133,13 +134,16 @@ func (d *Database) Search(prefix string, re *regexp.Regexp, appendFn AppendFn) e
 
 // New creates a new database
 func New(dbfile, bucket string, opts *bolt.Options) (*Database, error) {
+	conn := &Database{
+		bucket:   bucket,
+		IsRemote: opts.OpenFile != nil,
+	}
 	db, err := bolt.Open(dbfile, 0600, opts)
 	if err != nil {
 		return nil, err
 	}
-	conn := &Database{db, bucket}
+	conn.db = db
 	return conn, nil
-	// return conn, conn.CreateBucketIfNotExists(bucket)
 }
 
 // NewOrDie create a new database or panics

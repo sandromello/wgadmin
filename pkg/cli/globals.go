@@ -3,14 +3,19 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/sandromello/wgadmin/pkg/store"
+	storeclient "github.com/sandromello/wgadmin/pkg/store/client"
+	bolt "go.etcd.io/bbolt"
 )
 
 type CmdServer struct {
 	Address        string
 	ListenPort     int
 	PublicEndpoint string
+	InterfaceName  string
+	Override       bool
 }
 
 type CmdPeer struct {
@@ -19,20 +24,43 @@ type CmdPeer struct {
 	Override         bool
 }
 
+type CmdConfigure struct {
+	ConfigFile    string
+	InterfaceName string
+	Sync          time.Duration
+}
+
+type CmdWebServer struct {
+	HTTPPort string
+}
+
 type CmdOptions struct {
 	ShowVersionAndExit bool
 	JSONFormat         bool
+	Local              bool
 
-	Server CmdServer
-	Peer   CmdPeer
+	Server    CmdServer
+	Peer      CmdPeer
+	Configure CmdConfigure
+	WebServer CmdWebServer
 }
+
+const (
+	cmdTimeoutInSeconds = 2
+)
 
 var (
 	O CmdOptions
 
-	WGAppConfigPath = os.ExpandEnv("$HOME/.wgapp")
-	DBFile          = filepath.Join(WGAppConfigPath, store.DBFileName)
+	GlobalWGAppConfigPath = os.ExpandEnv("$HOME/.wgapp")
+	GlobalDBFile          = filepath.Join(GlobalWGAppConfigPath, store.DBFileName)
+	GlobalBoltOptions     = &bolt.Options{OpenFile: storeclient.FetchFromGCS}
 )
+
+// InitEmptyBoltOptions initialize an empty bolt.Options
+func InitEmptyBoltOptions() *bolt.Options {
+	return &bolt.Options{}
+}
 
 // func InitServer() error {
 // 	fi, err := os.Stat(WGAppConfigPath)
