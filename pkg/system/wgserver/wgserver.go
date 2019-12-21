@@ -18,16 +18,16 @@ const (
 
 var wgAdminServerUnitTemplate = []byte(
 	`[Unit]
-	Description=wgadmin-server: It manages wireguard servers
-	[Service]
-	Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-	EnvironmentFile=-/etc/default/wgadmin
-	ExecStart=/usr/bin/wgadmin configure server $WGADMIN_SERVER --config $WGADMIN_CONFIG_FILE --sync $WGADMIN_SERVER_SYNC
-	Restart=always
-	StartLimitInterval=0
-	RestartSec=300
-	[Install]
-	WantedBy=multi-user.target
+Description=wgadmin-server: It manages wireguard servers
+[Service]
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile=-/etc/default/wgadmin
+ExecStart=wgadmin configure server $WGADMIN_SERVER --config $WGADMIN_CONFIG_FILE --sync $WGADMIN_SERVER_SYNC
+Restart=always
+StartLimitInterval=0
+RestartSec=300
+[Install]
+WantedBy=multi-user.target
 `)
 
 // StopWireguardManager stop the systemd unit

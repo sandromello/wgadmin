@@ -2,6 +2,7 @@ package api
 
 import (
 	"net"
+	"time"
 )
 
 // KeyLen is the expected key length for a WireGuard key.
@@ -35,16 +36,35 @@ const (
 	PeerStatusBlocked PeerStatus = "blocked"
 )
 
+// PeerExpireActionType indicate what to do when the peer is expired
+type PeerExpireActionType string
+
+const (
+	// PeerExpireActionDefault is the default mode and peers will never expire
+	PeerExpireActionDefault PeerExpireActionType = ""
+	// PeerExpireActionReset will expire peers after a specified time
+	// the client will need to eventually ask for a new client config.
+	// The duration is calculated using the .metadata.createdAt attribute of a peer
+	PeerExpireActionReset PeerExpireActionType = "reset"
+	// PeerExpireActionBlock it will remove the peer without expiring it.
+	// The client will need to unblock its peer from time configured basis.
+	// The duration is calculated using the .metadata.updatedAt attribute of a peer
+	PeerExpireActionBlock PeerExpireActionType = "block"
+)
+
 // WireguardServerConfig represents the main config server of a wireguard server
 type WireguardServerConfig struct {
 	Metadata `json:",inline"`
 
-	Address        *net.IPNet `json:"address"`
-	ListenPort     int        `json:"listenPort"`
-	PrivateKey     *Key       `json:"privateKey"`
-	PostUp         []string   `json:"postUp"`
-	PostDown       []string   `json:"postDown"`
-	PublicEndpoint string     `json:"publicEndpoint"`
+	Address        string   `json:"address"`
+	ListenPort     int      `json:"listenPort"`
+	PrivateKey     *Key     `json:"privateKey"`
+	PostUp         []string `json:"postUp"`
+	PostDown       []string `json:"postDown"`
+	PublicEndpoint string   `json:"publicEndpoint"`
+
+	// Peers from this server will inheret this value
+	PeerExpireAction PeerExpireActionType `json:"peerExpireAction"`
 
 	// Only peers with status active
 	ActivePeers []Peer `json:"peers"` // TODO: deprecate in flavor of peer selector
@@ -56,9 +76,11 @@ type WireguardServerConfig struct {
 type Peer struct {
 	Metadata `json:",inline"`
 
-	PublicKey   *Key      `json:"publicKey"`
-	AllowedIPs  net.IPNet `json:"allowedIPs"`
-	SecretValue string    `json:"secretValue"`
+	PublicKey      *Key                 `json:"publicKey"`
+	AllowedIPs     net.IPNet            `json:"allowedIPs"`
+	SecretValue    string               `json:"secretValue"`
+	ExpireAction   PeerExpireActionType `json:"peerExpireAction"`
+	ExpireDuration time.Duration        `json:"expireDuration"`
 
 	Status PeerStatus `json:"status"`
 }

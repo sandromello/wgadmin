@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
 	"github.com/sandromello/wgadmin/pkg/api"
 	storeclient "github.com/sandromello/wgadmin/pkg/store/client"
+	"github.com/sandromello/wgadmin/web"
 	"github.com/spf13/cobra"
 )
 
@@ -112,9 +114,20 @@ func RunWebServerCmd() *cobra.Command {
 		PersistentPreRunE: PersistentPreRunE,
 		SilenceUsage:      true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			http.HandleFunc("/peers/", configurePeerHandler)
+			mux := http.NewServeMux()
+
+			// Static Files
+			staticDir := path.Join("", "web/static")
+			fs := http.FileServer(http.Dir(staticDir))
+			mux.Handle("/static/", http.StripPrefix("/static/", fs))
+
+			handler := web.NewHandler([]byte(`mykey`))
+			mux.HandleFunc("/", handler.Index)
+			mux.HandleFunc("/login", handler.Login)
+			mux.HandleFunc("/peers/", handler.Peers)
+			// http.HandleFunc("/peers/", configurePeerHandler)
 			log.Printf("Starting the webserver at :%s ...", O.WebServer.HTTPPort)
-			return http.ListenAndServe(fmt.Sprintf(":%s", O.WebServer.HTTPPort), nil)
+			return http.ListenAndServe(fmt.Sprintf(":%s", O.WebServer.HTTPPort), mux)
 		},
 	}
 	cmd.Flags().StringVar(&O.WebServer.HTTPPort, "port", "8000", "The port of the server.")

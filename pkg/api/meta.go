@@ -11,7 +11,9 @@ import (
 	"os"
 	"strings"
 	"text/template"
+	"time"
 
+	"github.com/sandromello/wgadmin/pkg/util"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -69,7 +71,40 @@ func (p *Peer) GetStatus() string {
 	if p.Status == PeerStatusInitial {
 		return "initial"
 	}
+	if p.IsExpired() && p.ExpireAction != PeerExpireActionDefault {
+		return "expired"
+	}
 	return string(p.Status)
+}
+
+// GetServer retrieves the wireguard server which this peer belongs to
+func (p *Peer) GetServer() string {
+	return strings.Split(p.UID, "/")[0]
+}
+
+// ShouldAutoLock verify if a peer should be locked
+func (p *Peer) ShouldAutoLock() bool {
+	return p.ExpireAction != PeerExpireActionDefault && p.IsExpired()
+}
+
+// IsExpired check if the peer is expired
+func (p *Peer) IsExpired() bool {
+	return p.GetExpirationDuration() <= 0
+}
+
+// GetExpirationDuration retrieves the expiration of a given peer
+func (p *Peer) GetExpirationDuration() time.Duration {
+	if p.PublicKey == nil {
+		return time.Duration(0)
+	}
+	var t time.Time
+	switch p.ExpireAction {
+	case PeerExpireActionBlock:
+		t, _ = time.Parse(time.RFC3339, p.UpdatedAt)
+	case PeerExpireActionReset:
+		t, _ = time.Parse(time.RFC3339, p.CreatedAt)
+	}
+	return util.RoundTime((p.ExpireDuration - time.Now().UTC().Sub(t)), time.Second)
 }
 
 // ParseDNSToComma parses the DNS config to a comma for each entry

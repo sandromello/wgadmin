@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/sandromello/wgadmin/pkg/cli"
+	"github.com/sandromello/wgadmin/pkg/version"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +26,8 @@ func main() {
 		Short: "wgapp manages users and wireguard servers.",
 		Run: func(cmd *cobra.Command, args []string) {
 			if cli.O.ShowVersionAndExit {
-				// version.PrintAndExit()
+				fmt.Println(string(version.JSON()))
+				os.Exit(0)
 			}
 			cmd.Help()
 		},
@@ -73,6 +76,7 @@ func main() {
 		cli.RunWebServerCmd(),
 	)
 	root.PersistentFlags().BoolVar(&cli.O.Local, "local", false, "Fetch from local database instead of remote.")
+	root.PersistentFlags().BoolVar(&cli.O.ShowVersionAndExit, "version", false, "Show version.")
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}

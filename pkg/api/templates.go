@@ -1,7 +1,7 @@
 package api
 
 var templateWireguardServerConfig = []byte(`[Interface]
-Address    = {{ .Address.String }}
+Address    = {{ .Address }}
 ListenPort = {{ .ListenPort }}
 PrivateKey = {{ .PrivateKey.String }}
 

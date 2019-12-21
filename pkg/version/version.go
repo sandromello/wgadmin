@@ -1,6 +1,7 @@
 package version
 
 import (
+	"encoding/json"
 	"fmt"
 	"runtime"
 )
@@ -16,10 +17,9 @@ type Info struct {
 }
 
 var (
-	version    string
-	gitVersion string
-	gitCommit  = "$Format:%H$"          // sha1 from git, output of $(git rev-parse HEAD)
-	buildDate  = "1970-01-01T00:00:00Z" // build date in ISO8601 format, output of $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+	version   string
+	gitCommit = "$Format:%H$"          // sha1 from git, output of $(git rev-parse HEAD)
+	buildDate = "1970-01-01T00:00:00Z" // build date in ISO8601 format, output of $(date -u +'%Y-%m-%dT%H:%M:%SZ')
 )
 
 // Get returns the overall codebase version. It's for detecting
@@ -33,4 +33,10 @@ func Get() Info {
 		Compiler:  runtime.Compiler,
 		Platform:  fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 	}
+}
+
+// JSON returns the version information in JSON format
+func JSON() []byte {
+	data, _ := json.Marshal(Get())
+	return data
 }

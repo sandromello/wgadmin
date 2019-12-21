@@ -1,10 +1,10 @@
 package cli
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -12,27 +12,9 @@ import (
 
 	"github.com/sandromello/wgadmin/pkg/api"
 	storeclient "github.com/sandromello/wgadmin/pkg/store/client"
+	"github.com/sandromello/wgadmin/pkg/util"
 	"github.com/spf13/cobra"
 )
-
-// generateRandomString returns a URL-safe, base64 encoded
-// securely generated random string.
-// It will return an error if the system's secure random
-// number generator fails to function correctly, in which
-// case the caller should not continue.
-func generateRandomString(n int) (string, error) {
-	bytes := make([]byte, n)
-	_, err := rand.Read(bytes)
-	// Note that err == nil only if we read len(b) bytes.
-	if err != nil {
-		return "", err
-	}
-	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-"
-	for i, b := range bytes {
-		bytes[i] = letters[b%byte(len(letters))]
-	}
-	return string(bytes), err
-}
 
 // TODO: add function to generate a random ip address from the wireguard server network
 
@@ -56,9 +38,11 @@ func PeerAddCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// <server>/<peer>
+			parts := strings.Split(args[0], "/")
 			p, err := client.Peer().Get(args[0])
 			if err == nil && (p == nil || O.Peer.Override) {
-				randomString, err := generateRandomString(50)
+				randomString, err := util.GenerateRandomString(50)
 				if err != nil {
 					return fmt.Errorf("failed generating random string: %v", err)
 				}
@@ -67,16 +51,23 @@ func PeerAddCmd() *cobra.Command {
 				if allowedIPs == nil {
 					return fmt.Errorf("failed parsing ip address: %v", O.Peer.Address)
 				}
+				wgsc, err := client.WireguardServerConfig().Get(parts[0])
+				if err != nil || wgsc == nil {
+					return fmt.Errorf("failed fetching server, err=%v", err)
+				}
 				randomSecret := fmt.Sprintf("%s.conf", randomString)
+				// O.Peer.AutoLockDuration
 				if err := client.Peer().Update(&api.Peer{
 					Metadata: api.Metadata{
 						UID:       args[0],
 						CreatedAt: time.Now().UTC().Format(time.RFC3339),
 					},
-					PublicKey:   nil, // will be set when downloading the config
-					AllowedIPs:  *allowedIPs,
-					Status:      api.PeerStatusInitial,
-					SecretValue: randomSecret,
+					PublicKey:      nil, // will be set when downloading the config
+					ExpireAction:   wgsc.PeerExpireAction,
+					ExpireDuration: O.Peer.ParseExpireDuration("24h"),
+					AllowedIPs:     *allowedIPs,
+					Status:         api.PeerStatusInitial,
+					SecretValue:    randomSecret,
 				}); err != nil {
 					return err
 				}
@@ -93,6 +84,7 @@ func PeerAddCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&O.Peer.PublicAddressURL, "public-address", "http://127.0.0.1", "The public address that will be used to download the wireguard client config.")
 	cmd.Flags().StringVar(&O.Peer.Address, "address", "", "The address of the peer, must not overlap with other peers.")
+	cmd.Flags().StringVar(&O.Peer.ExpireDuration, "expire-in", "24h", "The duration for auto expiring or locking the peer.")
 	cmd.Flags().BoolVar(&O.Peer.Override, "override", false, "Override the configured peer, it will reset the current configuration.")
 	return cmd
 }
@@ -128,10 +120,6 @@ func PeerInfoCmd() *cobra.Command {
 				fmt.Println(string(jsonData))
 				return nil
 			}
-			status := peer.Status
-			if status == api.PeerStatusInitial {
-				status = "initial"
-			}
 			pubkey := "-"
 			if peer.PublicKey != nil {
 				pubkey = peer.PublicKey.String()
@@ -142,7 +130,8 @@ func PeerInfoCmd() *cobra.Command {
 			fmt.Println("PUBKEY:", pubkey)
 			fmt.Println("SECRET:", peer.SecretValue)
 			fmt.Println("ALLOWEDIPS:", peer.AllowedIPs.String())
-			fmt.Println("STATUS:", status)
+			fmt.Println("AUTOLOCK:", peer.ShouldAutoLock())
+			fmt.Println("STATUS:", peer.GetStatus())
 			return nil
 		},
 	}
@@ -189,7 +178,7 @@ active: The user has dowloaded the client configuration and it's ready to establ
 			}
 			peer.Status = peerStatus
 			if peer.Status == api.PeerStatusInitial {
-				randomString, err := generateRandomString(50)
+				randomString, err := util.GenerateRandomString(50)
 				if err != nil {
 					return fmt.Errorf("failed generating random string: %v", err)
 				}
@@ -243,7 +232,8 @@ func PeerListCmd() *cobra.Command {
 				fmt.Println("No resources found.")
 				return nil
 			}
-			fmt.Fprintln(w, "UID\tALLOWEDIP\tSECRET\tPUBKEY\tSTATUS\tUPDATED AT\t")
+
+			fmt.Fprintln(w, "UID\tALLOWEDIP\tSECRET\tPUBKEY\tSTATUS\tEXPIRE IN\tUPDATED AT\t")
 			for _, p := range peerList {
 				var pubkey string
 				if p.PublicKey != nil {
@@ -252,10 +242,6 @@ func PeerListCmd() *cobra.Command {
 					suffixPubKey := pubkey[len(pubkey)-6 : len(pubkey)]
 					pubkey = fmt.Sprintf("%s...%s", prefixPubKey, suffixPubKey)
 				}
-				status := p.Status
-				if p.Status == api.PeerStatusInitial {
-					status = "initial"
-				}
 				var secret string
 				if len(p.SecretValue) > 0 {
 					prefixSecret := p.SecretValue[0:5]
@@ -263,8 +249,17 @@ func PeerListCmd() *cobra.Command {
 					secret = fmt.Sprintf("%s...%s", prefixSecret, suffixSecret)
 				}
 				ipaddr := p.AllowedIPs.String()
-				updatedAt := getDeltaDuration(p.UpdatedAt, "")
-				fmt.Fprintf(w, "%s\t%s\t%v\t%s\t%v\t%v\t", p.UID, ipaddr, secret, pubkey, status, updatedAt)
+				var expin string
+				switch d := p.GetExpirationDuration(); {
+				case d <= 0 || p.PublicKey == nil:
+					expin = "-"
+				case d.Hours() > 24:
+					expin = fmt.Sprintf("%.fd", math.Floor(d.Hours()/24))
+				default:
+					expin = d.String()
+				}
+				updatedAt := util.GetDeltaDuration(p.UpdatedAt, "")
+				fmt.Fprintf(w, "%s\t%s\t%v\t%s\t%v\t%v\t%v\t", p.UID, ipaddr, secret, pubkey, p.GetStatus(), expin, updatedAt)
 				fmt.Fprintln(w)
 			}
 

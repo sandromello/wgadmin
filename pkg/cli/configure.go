@@ -211,9 +211,10 @@ func ConfigurePeersCmd() *cobra.Command {
 				}
 				dirty := 0
 				for _, peer := range desiredPeers {
-					logf.Debugf("op=revoke, peer=%v, status=%v", peer.UID, peer.GetStatus())
-					if peer.Status == api.PeerStatusBlocked {
-						logf.Infof("Removing revoked peer %v", peer.UID)
+					shouldAutoLock := peer.ShouldAutoLock()
+					logf.Debugf("op=revoke, peer=%v, status=%v, autolock=%v", peer.UID, peer.GetStatus(), shouldAutoLock)
+					if peer.Status == api.PeerStatusBlocked || peer.Status == api.PeerStatusActive && shouldAutoLock {
+						logf.Infof("Removing dirty peer %v", peer.UID)
 						stdout, err := wgtools.WGRemovePeer(iface, peer.PublicKeyString())
 						if err != nil {
 							msg := fmt.Sprintf("%v. %v", strings.TrimSuffix(string(stdout), "\n"), err)
@@ -250,7 +251,8 @@ func ConfigurePeersCmd() *cobra.Command {
 				}
 				// add peers if doesn't exists locally
 				for _, desired := range desiredPeers {
-					if desired.Status != api.PeerStatusActive {
+					// don't process blocked, locked or expired peers
+					if desired.Status != api.PeerStatusActive || desired.ShouldAutoLock() {
 						continue
 					}
 					logf.Debugf("op=add, peer=%s, status=%v", desired.UID, desired.GetStatus())

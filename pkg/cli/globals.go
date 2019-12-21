@@ -11,17 +11,27 @@ import (
 )
 
 type CmdServer struct {
-	Address        string
-	ListenPort     int
-	PublicEndpoint string
-	InterfaceName  string
-	Override       bool
+	Address              string
+	ListenPort           int
+	PublicEndpoint       string
+	PeerExpireActionType string
+	InterfaceName        string
+	Override             bool
 }
 
 type CmdPeer struct {
 	PublicAddressURL string
 	Address          string
+	ExpireDuration   string
 	Override         bool
+}
+
+func (c *CmdPeer) ParseExpireDuration(defaultDuration string) time.Duration {
+	d, err := time.ParseDuration(c.ExpireDuration)
+	if err != nil {
+		d, _ = time.ParseDuration(defaultDuration)
+	}
+	return d
 }
 
 type CmdConfigure struct {

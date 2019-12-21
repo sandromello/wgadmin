@@ -44,10 +44,10 @@ func ListServer() *cobra.Command {
 				fmt.Println("No resources found.")
 				return nil
 			}
-			fmt.Fprintln(w, "UID\tADDRESS\tPORT\tPUBKEY\tPEERS\t")
+			fmt.Fprintln(w, "UID\tADDRESS\tPORT\tPUBKEY\tEXPIREACTION\tPEERS\t")
 			for _, wg := range wgscList {
 				pubkey := wg.PrivateKey.PublicKey().String()
-				fmt.Fprintf(w, "%s\t%s\t%v\t%s\t%v\t", wg.UID, wg.Address, wg.ListenPort, pubkey, len(wg.ActivePeers))
+				fmt.Fprintf(w, "%s\t%s\t%v\t%s\t%v\t%v\t", wg.UID, wg.Address, wg.ListenPort, pubkey, wg.PeerExpireAction, len(wg.ActivePeers))
 				fmt.Fprintln(w)
 			}
 			return nil
@@ -136,15 +136,22 @@ func InitServer() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed generating private key: %v", err)
 			}
+			expireAction := O.Server.PeerExpireActionType
+			switch api.PeerExpireActionType(expireAction) {
+			case api.PeerExpireActionBlock, api.PeerExpireActionReset:
+			default:
+				expireAction = ""
+			}
 			err = client.WireguardServerConfig().Update(&api.WireguardServerConfig{
 				Metadata: api.Metadata{
 					UID:       wgenv,
 					CreatedAt: time.Now().UTC().Format(time.RFC3339),
 				},
-				Address:        api.ParseCIDR(O.Server.Address),
-				PublicEndpoint: O.Server.PublicEndpoint,
-				ListenPort:     O.Server.ListenPort,
-				PrivateKey:     &privKey,
+				Address:          O.Server.Address,
+				PublicEndpoint:   O.Server.PublicEndpoint,
+				PeerExpireAction: api.PeerExpireActionType(expireAction),
+				ListenPort:       O.Server.ListenPort,
+				PrivateKey:       &privKey,
 				PostUp: []string{
 					// https://github.com/StreisandEffect/streisand/issues/1089#issuecomment-350400689
 					fmt.Sprintf("ip link set mtu 1360 dev %s", O.Server.InterfaceName),
@@ -153,12 +160,14 @@ func InitServer() *cobra.Command {
 					"sysctl -w net.ipv4.ip_forward=1",
 					"sysctl -w net.ipv6.conf.all.forwarding=1",
 					"iptables -A FORWARD -o %i -j ACCEPT",
+					"iptables -A FORWARD -i %i -j ACCEPT",
 					fmt.Sprintf("iptables -t nat -A POSTROUTING -o %s -j MASQUERADE", O.Server.InterfaceName),
 				},
 				PostDown: []string{
 					"sysctl -w net.ipv4.ip_forward=0",
 					"sysctl -w net.ipv6.conf.all.forwarding=0",
 					"iptables -D FORWARD -o %i -j ACCEPT",
+					"iptables -D FORWARD -i %i -j ACCEPT",
 					fmt.Sprintf("iptables -t nat -D POSTROUTING -o %s -j MASQUERADE", O.Server.InterfaceName),
 				},
 			})
@@ -169,8 +178,9 @@ func InitServer() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&O.Server.InterfaceName, "iface", "eth0", "The name of the interface which will be used to run scripts.")
-	cmd.Flags().StringVar(&O.Server.Address, "address", "192.168.180.1/32", "The address of wireguard server config.")
+	cmd.Flags().StringVar(&O.Server.Address, "address", "192.168.180.1/22", "The address of wireguard server config.")
 	cmd.Flags().StringVar(&O.Server.PublicEndpoint, "endpoint", "", "The public [DNS|IP]:PORT for the wireguard server instance.")
+	cmd.Flags().StringVar(&O.Server.PeerExpireActionType, "expire-action", "", "The action when the peer is expired: reset or block, default to not expire.")
 	cmd.Flags().BoolVar(&O.Server.Override, "override", false, "Override the current configuration.")
 	cmd.Flags().IntVar(&O.Server.ListenPort, "listen-port", 51820, "The listen port for the wireguard server.")
 	return cmd
