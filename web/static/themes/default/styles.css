@@ -74,11 +74,6 @@ h2 {
   mask: url(../../img/icons/download-solid.svg);
 }
 
-.icon-unlock {
-  -webkit-mask: url(../../img/icons/unlock-solid.svg);
-  mask: url(../../img/icons/unlock-solid.svg);
-}
-
 .icon-vpn {
   width: 15px;
   height: 15px;

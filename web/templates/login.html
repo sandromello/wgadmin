@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en" >
+  <head>
+    <meta charset="UTF-8">
+    <meta name="google-signin-scope" content="profile email">
+    <meta name="google-signin-client_id" content="{{ .PageConfig.GoogleClientID }}">
+    <title>{{ .PageConfig.Title }}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/5.0.0/normalize.min.css">
+    <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css'>
+    <link rel="stylesheet" href="{{ .PageConfig.ThemeCSSURL }}">
+    <link rel='icon' type='image/png' href='{{ .PageConfig.FaviconURL }}' />
+  </head>
+  <body>
+    <div class="well-2">
+      <div>
+        <div>
+          <div style="text-align: center">
+            <img src="{{ .PageConfig.LogoURL }}" class="logo" />
+          </div>
+          <div>
+            <h2>VPN Authentication Service</h2>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: center;">
+          <div id="signin"></div>
+        </div>
+        <form id="on-sign-in-callback" action="/" method="POST" enctype="multipart/form-data">
+          <input id="token-hidden-input" type="hidden" name="id_token" />
+        </form>
+      </div>
+    </div>
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.0/jquery.min.js'></script>
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js'></script>
+  <script>
+    function onSuccess(googleUser) {
+      console.log('Logged in as: ' + googleUser.getBasicProfile().getName());
+      var id_token = googleUser.getAuthResponse().id_token;
+      document.getElementById('token-hidden-input').value = id_token
+      document.getElementById('on-sign-in-callback').submit()
+    }
+    function onFailure(error) {
+      console.error(error);
+    }
+    function renderButton() {
+      gapi.signin2.render('signin', {
+        'scope': 'profile email',
+        'theme': 'dark',
+        'longtitle': true,
+        'ux_mode': 'redirect',
+        'redirect_uri': '{{ .PageConfig.GoogleRedirectURI }}',
+        'onsuccess': onSuccess,
+        'onfailure': onFailure
+      });
+    }
+  </script>
+  <script src="https://apis.google.com/js/platform.js?onload=renderButton" async defer></script>
+  </body>
+</html>

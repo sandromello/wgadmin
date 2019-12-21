@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en" >
+
+  <head>
+    <meta charset="UTF-8">
+    <title>{{ .PageConfig.Title }}</title>
+    <link rel="stylesheet" href="{{ .PageConfig.ThemeCSSURL }}">
+    <link rel='icon' type='image/png' href='{{ .PageConfig.FaviconURL }}' />
+  </head>
+
+  <body>
+    <div id="navbar" class="navbar">
+      <div style="flex-grow:1; padding: 15px">
+        <img src="{{ .PageConfig.LogoURL }}" class="logo-navbar" />
+      </div>
+      <div style="padding: 15px">
+        <a href="/" class="icon icon-signout" ></a>
+      </div>
+    </div>
+    <div id="main">
+      <div id="background-logo" style="display:none">
+          <img src="{{ .PageConfig.LogoURL }}" class="background-logo" />
+      </div>
+      <div id="peers" class="content">
+      {{ if not .Peers -}}
+        <div class="info">No resources found.</div>
+      {{- end }}
+      {{ if .Peers -}}
+        <div class="box">
+          <div style="padding: 15px">
+            <code>
+              <h3>VPN Configuration Instructions</h3>
+              <ol>
+                <li>Install a <a href="https://www.wireguard.com/install/" target="_blank">Wireguard Client</a> for your platform;</li>
+                <li>Download a VPN configuration file below;</li>
+                <li>Import the configuration to your Wireguard Client;</li>
+                <li>Connect to your preferred VPN.</li>
+              </ol>
+              If your credentials is expired, you'll need
+              to download or unblock (not implemented) your VPN.
+            </code>
+          </div>
+        </div>
+      {{- end }}
+      {{ range .Peers -}}
+        <div class="box">
+          <div class="box-header">
+            <div style="flex-grow:1; display: flex; align-items: center">
+              <span class="info" style="font-size:22px; font-weight:bold;"> {{.GetServer }} </span>
+              <div style="padding-left: 10px">
+                <span style="float: left" class="icon icon-vpn icon-vpn-{{ .GetStatus }}"></span>
+              </div>
+              <span class="icon-vpn-title icon-vpn-title-{{ .GetStatus }}">{{ .GetStatus }}</span>
+            </div>
+            <div style="padding-left: 15px">
+              <a name="{{ .UID }}" href="" onclick="submitForm(event)" class="icon icon-download"></a>
+            </div>
+          </div>
+          <div style="padding: 15px">
+            <div class="info-box">
+              <div class="info-title">Updated At (UTC)</div>
+              <div class="info">{{ .UpdatedAt }}</div>
+            </div>
+            <div class="info-box">
+              <div class="info-title">Created At (UTC)</div>
+              <div class="info">{{ .CreatedAt }}</div>
+            </div>
+            <div class="info-box">
+              <div class="info-title">Allowed IPs</div>
+              <div class="info">{{ .AllowedIPs.String }}</div>
+            </div>
+            {{ if not .IsExpired -}}
+            <div class="info-box">
+              <div class="info-title">Expires In</div>
+              <div class="info">{{ .GetExpirationDuration.String }}</div>
+            </div>
+            {{- end }}
+            {{ if .ExpireAction -}}
+            <div class="info-box">
+              <div class="info-title">Expire Action</div>
+              <div class="info">{{ .ExpireAction }}</div>
+            </div>
+            {{- end }}
+            {{ if .PublicKeyString -}}
+            <div class="info-box">
+              <div class="info-title">Pub Key</div>
+              <div class="info">{{ .PublicKeyString }}</div>
+            </div>
+            {{- end }}
+            <form id="{{ .UID }}" action="/peers/" method="POST" target="_blank">
+              <input type="hidden" id="peer_uid" name="peer_uid" value="{{ .UID }}">
+            </form>
+          </div>
+        </div>
+      {{- end }}
+      </div>
+    </div>
+  </body>
+  <script>
+    document.addEventListener("visibilitychange", function() {
+      if (document.visibilityState === 'visible') {
+        location.reload();
+      } else {
+        document.getElementById('background-logo').style.display = 'block';
+        document.getElementById('peers').style.display = 'none';
+        document.getElementById('navbar').style.display = 'none';
+      }
+    });
+    function submitForm(e) {
+      e.preventDefault();
+      document.getElementById(e.target.name).submit();
+    }
+  </script>
+</html>

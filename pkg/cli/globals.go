@@ -7,6 +7,7 @@ import (
 
 	"github.com/sandromello/wgadmin/pkg/store"
 	storeclient "github.com/sandromello/wgadmin/pkg/store/client"
+	"github.com/sandromello/wgadmin/web"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -41,7 +42,8 @@ type CmdConfigure struct {
 }
 
 type CmdWebServer struct {
-	HTTPPort string
+	HTTPPort   string
+	PageConfig web.PageConfig
 }
 
 type CmdOptions struct {
@@ -71,24 +73,3 @@ var (
 func InitEmptyBoltOptions() *bolt.Options {
 	return &bolt.Options{}
 }
-
-// func InitServer() error {
-// 	fi, err := os.Stat(WGAppConfigPath)
-// 	if os.IsNotExist(err) {
-// 		if err := os.MkdirAll(WGAppConfigPath, 0744); err != nil {
-// 			return err
-// 		}
-// 		return nil
-// 	}
-// 	if !fi.Mode().IsDir() {
-// 		return fmt.Errorf("wgapp config path %q is a file", WGAppConfigPath)
-// 	}
-// 	return nil
-// }
-
-// func StorePreLoad(cmd *cobra.Command, args []string) {
-// 	// expected <bucket>/<resource> or <bucket>
-// 	parts := strings.Split(args[0], "/")
-// 	dbfile := filepath.Join(WGAppConfigPath, "store.db")
-// 	StoreClient = storeclient.NewOrDie(dbfile, parts[0], nil)
-// }

@@ -5,106 +5,10 @@ import (
 	"log"
 	"net/http"
 	"path"
-	"strings"
-	"time"
 
-	"github.com/sandromello/wgadmin/pkg/api"
-	storeclient "github.com/sandromello/wgadmin/pkg/store/client"
 	"github.com/sandromello/wgadmin/web"
 	"github.com/spf13/cobra"
 )
-
-func configurePeerHandler(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
-	vpn := r.URL.Query().Get("vpn")
-	client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer client.Close()
-
-	peerList, err := client.Peer().List()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	var peer *api.Peer
-	for _, p := range peerList {
-		if p.SecretValue == parts[1] {
-			peer = &p
-			break
-		}
-	}
-	if peer == nil {
-		http.Error(w, "Error: peer not found for this token.", http.StatusNotFound)
-		return
-	}
-	if peer.Status == api.PeerStatusBlocked {
-		http.Error(w, "Error: peer blocked, contact the administrator!", http.StatusBadRequest)
-		return
-	}
-	updAt, err := time.Parse(time.RFC3339, peer.UpdatedAt)
-	if err != nil {
-		http.Error(w, "Error: failed parsing updated time for peer!", http.StatusInternalServerError)
-		return
-	}
-	if updAt.Add(time.Minute * 30).Before(time.Now().UTC()) {
-		msg := fmt.Sprintf("Error: secret has expired, updated at: %v!", peer.UpdatedAt)
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-
-	clientPrivkey, err := api.GeneratePrivateKey()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	wgsc, err := client.WireguardServerConfig().Get(vpn)
-	if wgsc == nil && err == nil {
-		msg := fmt.Sprintf("Error: the wireguard server %q doesn't exists", vpn)
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-	if err != nil {
-		msg := fmt.Sprintf("Error: failed retrieving wireguard server config object: %v", err)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
-	}
-
-	data, err := api.ParseWireguardClientConfigTemplate(map[string]interface{}{
-		"PrivateKey": clientPrivkey,
-		"PublicKey":  wgsc.PrivateKey.PublicKey(),
-		"Address":    peer.AllowedIPs.String(),
-		"DNS":        "1.1.1.1, 8.8.8.8",
-		"Endpoint":   wgsc.PublicEndpoint,
-		"AllowedIPs": "0.0.0.0/0, ::/0",
-	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	pubkey := clientPrivkey.PublicKey()
-	peer.PublicKey = &pubkey
-	peer.Status = api.PeerStatusActive
-	// it's important to let the client to download the
-	// configuration only once for security concerns.
-	peer.SecretValue = ""
-	if err := client.Peer().Update(peer); err != nil {
-		msg := fmt.Sprintf("Error: failed updating peer: %v", err)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
-	}
-	if err := client.SyncRemote(); err != nil {
-		msg := fmt.Sprintf("Error: failed syncing with GCS: %v", err)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-	fmt.Fprintf(w, string(data))
-}
 
 // RunWebServerCmd start the webserver
 func RunWebServerCmd() *cobra.Command {
@@ -121,7 +25,7 @@ func RunWebServerCmd() *cobra.Command {
 			fs := http.FileServer(http.Dir(staticDir))
 			mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
-			handler := web.NewHandler([]byte(`mykey`))
+			handler := web.NewHandler([]byte(`mykey`), &O.WebServer.PageConfig)
 			mux.HandleFunc("/", handler.Index)
 			mux.HandleFunc("/login", handler.Login)
 			mux.HandleFunc("/peers/", handler.Peers)
@@ -130,6 +34,14 @@ func RunWebServerCmd() *cobra.Command {
 			return http.ListenAndServe(fmt.Sprintf(":%s", O.WebServer.HTTPPort), mux)
 		},
 	}
+	pagec := &O.WebServer.PageConfig
 	cmd.Flags().StringVar(&O.WebServer.HTTPPort, "port", "8000", "The port of the server.")
+	cmd.Flags().StringVar(&pagec.GoogleClientID, "google-client-id", "", "The Google Client ID.")
+	cmd.Flags().StringVar(&pagec.GoogleRedirectURI, "google-redirect-uri", "", "The Google Redirect URI address.")
+	cmd.Flags().StringVar(&pagec.Title, "page-title", "VPN Service", "The title of the page.")
+	cmd.Flags().StringVar(&pagec.TemplatePath, "template-path", "web/templates", "The path of html file templates.")
+	cmd.Flags().StringVar(&pagec.ThemeCSSURL, "theme-css-url", "static/themes/default/styles.css", "The CSS theme.")
+	cmd.Flags().StringVar(&pagec.LogoURL, "logo-url", "static/img/logo.png", "The logo URL.")
+	cmd.Flags().StringVar(&pagec.FaviconURL, "favicon-url", "", "The favicon URL.")
 	return cmd
 }
