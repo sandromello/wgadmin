@@ -1,0 +1,175 @@
+body {
+  font-family: system, -apple-system, BlinkMacSystemFont, ".SFNSDisplay-Regular", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  background: linear-gradient(45deg, #13191f 0%, #2c2c2c 100%);
+  background-repeat: no-repeat;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+a {
+  color: #4e6e7d;
+}
+a:hover, a:focus, a:active {
+  color: #8dabba;
+}
+
+h2 {
+  font-size: 24px;
+  font-weight: 300;
+  margin-top: 0;
+  margin-bottom: 40px;
+  color: #fff;
+}
+
+.logo {
+  height: auto;
+  width: 230px;
+  padding-bottom: 10px;
+}
+
+.background-logo {
+  height: auto;
+  width: 350px;
+  padding-bottom: 10px;
+  opacity: 0.1;
+}
+
+.logo-navbar {
+  height: auto;
+  width: 150px;
+}
+
+.navbar {
+  display: flex;
+  align-items: center;
+  background-color: #232323;
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+  position: fixed;
+  height: 75px;
+  width: 100%;
+  z-index:1;
+  align-self: flex-start;
+}
+
+.icon {
+  width: 25px;
+  height: 25px;
+  display: inline-block;
+  -webkit-mask-size: cover;
+  mask-size: cover;
+  background-color: rgba(255, 255, 255, 0.65);
+}
+
+.icon-signout {
+  -webkit-mask: url(../../img/icons/sign-in-alt.svg);
+  mask: url(../../img/icons/sign-in-alt.svg);
+}
+
+.icon-download {
+  -webkit-mask: url(../../img/icons/download-solid.svg);
+  mask: url(../../img/icons/download-solid.svg);
+}
+
+.icon-unlock {
+  -webkit-mask: url(../../img/icons/unlock-solid.svg);
+  mask: url(../../img/icons/unlock-solid.svg);
+}
+
+.icon-vpn {
+  width: 15px;
+  height: 15px;
+  -webkit-mask: url(../../img/icons/dot-circle-solid.svg);
+  mask: url(../../img/icons/dot-circle-solid.svg);
+}
+
+.icon-vpn-expired {
+  background-color: #CCCC00;
+}
+
+.icon-vpn-blocked {
+  background-color: red;
+}
+
+.icon-vpn-active {
+  background-color: green;
+}
+
+.icon-vpn-initial {
+  background-color: #f3f3f348;
+}
+
+.icon-vpn-title {
+  text-transform: uppercase;
+  padding-left:5px;
+  font-size: 14px
+}
+
+.icon-vpn-title-initial {
+  color: #f3f3f348;
+}
+
+.icon-vpn-title-active {
+  color: green;
+}
+
+.icon-vpn-title-expired {
+  color: #CCCC00;
+}
+
+.icon-vpn-title-blocked {
+  color: red;
+}
+
+.icon-download:hover {
+  background-color: white;
+}
+
+.icon-signout:hover {
+  background-color: white;
+}
+
+.content {
+  margin-top: 100px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  height: auto;
+}
+
+.box {
+  background-color: #232323;
+  width: 500px;
+  color: #fff;
+  margin: 5px;
+  border-radius: 10px;
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.6);
+}
+
+.box-header {
+  border-bottom-color: #2c2c2c;
+  border-bottom-style: solid;
+  border-bottom-width: thin;
+  display: flex;
+  align-items: center;
+  padding: 15px;
+}
+
+.info-title {
+  color: #4e6e7d;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.info {
+  color: #8DABBA;
+  font-size: 15px;
+}
+
+.info-box {
+  padding: 5px;
+}
