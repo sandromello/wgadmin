@@ -124,7 +124,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if u == nil {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Redirect(w, r, "/signin", http.StatusSeeOther)
 			return
 		}
 		// TODO: refactor
@@ -162,8 +162,8 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Login the webapp login page
-func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+// Signin the webapp login page
+func (h *Handler) Signin(w http.ResponseWriter, r *http.Request) {
 	if os.Getenv("ENV") != "production" {
 		h.RenderTemplates()
 	}
@@ -172,6 +172,25 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		log.Errorf("failed executing template: %v", err)
 	}
+}
+
+// Signout removes data from session
+func (h *Handler) Signout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Implemented", http.StatusNotImplemented)
+		return
+	}
+	session, err := h.store.Get(r, "wgadmin")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	session.Values = nil
+	if err := session.Save(r, w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/signin", http.StatusSeeOther)
 }
 
 func (h *Handler) getSessionUser(r *http.Request) (*UserInfo, error) {
@@ -194,7 +213,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if u == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		http.Redirect(w, r, "/signin", http.StatusSeeOther)
 		return
 	}
 	configPath := filepath.Join(os.Getenv("$HOME/.wgapp/"), store.DBFileName)

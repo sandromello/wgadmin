@@ -27,7 +27,8 @@ func RunWebServerCmd() *cobra.Command {
 
 			handler := web.NewHandler([]byte(`mykey`), &O.WebServer.PageConfig)
 			mux.HandleFunc("/", handler.Index)
-			mux.HandleFunc("/login", handler.Login)
+			mux.HandleFunc("/signin", handler.Signin)
+			mux.HandleFunc("/signout/", handler.Signout)
 			mux.HandleFunc("/peers/", handler.Peers)
 			log.Printf("Starting the webserver at :%s ...", O.WebServer.HTTPPort)
 			return http.ListenAndServe(fmt.Sprintf(":%s", O.WebServer.HTTPPort), mux)

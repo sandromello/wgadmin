@@ -14,7 +14,7 @@
         <img src="{{ .PageConfig.LogoURL }}" class="logo-navbar" />
       </div>
       <div style="padding: 15px">
-        <a href="/" class="icon icon-signout" ></a>
+        <a href="#" onclick="signOut();" class="icon icon-signout" ></a>
       </div>
     </div>
     <div id="main">
@@ -53,7 +53,7 @@
               <span class="icon-vpn-title icon-vpn-title-{{ .GetStatus }}">{{ .GetStatus }}</span>
             </div>
             <div style="padding-left: 15px">
-              <a name="{{ .UID }}" href="" onclick="submitForm(event)" class="icon icon-download"></a>
+              <a href="" name="{{ .UID }}" onclick="submitForm(event)" class="icon icon-download"></a>
             </div>
           </div>
           <div style="padding: 15px">
@@ -93,6 +93,8 @@
           </div>
         </div>
       {{- end }}
+      <form id="signout" action="/signout/" method="POST">
+      </form>
       </div>
     </div>
   </body>
@@ -110,5 +112,22 @@
       e.preventDefault();
       document.getElementById(e.target.name).submit();
     }
+    function signOut() {
+      gapi.load('auth2', function() {
+        var auth2 = gapi.auth2.getAuthInstance();
+        auth2.signOut().then(function () {
+          document.getElementById('signout').submit();
+        });
+      })
+    }
+    function init() {
+      // https://developers.google.com/identity/sign-in/web/reference#auth_setup
+      gapi.load('auth2', function() {
+        gapi.auth2.init({ client_id: '{{ .PageConfig.GoogleClientID }}' }).then(function() {
+          console.log('Initialized!')
+        })
+      })
+    }
   </script>
+  <script src="https://apis.google.com/js/platform.js?onload=init" async defer></script>
 </html>
