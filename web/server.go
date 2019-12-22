@@ -86,20 +86,22 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case "POST":
-		// TODO: check for errors
-		session, _ := h.store.Get(r, "wgadmin")
-
+		session, err := h.store.Get(r, "wgadmin")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		if data, ok := session.Values["userinfo"]; ok {
 			u := UnmarshalUserInfo(data.([]byte))
 			if u != nil {
-				log.Infof("User '%s' already logged in, redirecting ...", u.Name)
+				expireAt := time.Unix(u.ExpiresAt, 0).Sub(time.Now().UTC())
+				log.Infof("user %s already logged in, expires in %v minute(s). Redirecting ...", u.Email, int(expireAt.Minutes()))
 				http.Redirect(w, r, "/", http.StatusSeeOther)
 				return
 			}
 		}
 		idToken := r.FormValue("id_token")
 		token, err := jwt.ParseWithClaims(idToken, &UserInfo{}, func(token *jwt.Token) (interface{}, error) {
-			// Don't forget to validate the alg is what you expect:
 			return []byte(``), nil
 		})
 		if u, ok := token.Claims.(*UserInfo); ok {
@@ -109,6 +111,9 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			session.Values["userinfo"] = u.ToJSON()
+			expireAt := time.Unix(u.ExpiresAt, 0).Sub(time.Now().UTC())
+			log.Infof("user %v signed in, expires in %v minutes", u.Email, int(expireAt.Minutes()))
+			session.Options.MaxAge = int(expireAt.Seconds())
 			if err := session.Save(r, w); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -156,7 +161,6 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		}); err != nil {
 			log.Errorf("failed executing template: %v", err)
 		}
-
 	default:
 		http.Error(w, "Method Not Implemented", http.StatusNotImplemented)
 	}
@@ -185,7 +189,8 @@ func (h *Handler) Signout(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	session.Values = nil
+	// Delete Session
+	session.Options.MaxAge = -1
 	if err := session.Save(r, w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -387,6 +392,7 @@ func NewHandler(sessionKey []byte, pconfig *PageConfig) *Handler {
 		store:      sessions.NewCookieStore(sessionKey),
 		pageConfig: pconfig,
 	}
+
 	h.RenderTemplates()
 	h.store.MaxAge(sessionMaxAgeInSeconds)
 	return h
