@@ -1,8 +1,10 @@
+@import 'colors.css';
+
 body {
   font-family: system, -apple-system, BlinkMacSystemFont, ".SFNSDisplay-Regular", "Helvetica Neue", Helvetica, Arial, sans-serif;
   min-height: 100vh;
   margin: 0;
-  background: linear-gradient(45deg, #13191f 0%, #2c2c2c 100%);
+  background: var(--background);
   background-repeat: no-repeat;
   display: flex;
   flex-direction: row;
@@ -11,10 +13,10 @@ body {
 }
 
 a {
-  color: #4e6e7d;
+  color: var(--link-color);
 }
 a:hover, a:focus, a:active {
-  color: #8dabba;
+  color: var(--link-color-pseudo-classes);
 }
 
 h2 {
@@ -46,7 +48,7 @@ h2 {
 .navbar {
   display: flex;
   align-items: center;
-  background-color: #232323;
+  background-color: var(--navbar);
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
   position: fixed;
   height: 75px;
@@ -119,11 +121,7 @@ h2 {
   color: red;
 }
 
-.icon-download:hover {
-  background-color: white;
-}
-
-.icon-signout:hover {
+.icon-download:hover, .icon-signout:hover {
   background-color: white;
 }
 
@@ -137,16 +135,16 @@ h2 {
 }
 
 .box {
-  background-color: #232323;
+  background-color: var(--box);
   width: 500px;
-  color: #fff;
+  color: var(--box-color);
   margin: 5px;
   border-radius: 10px;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.6);
 }
 
 .box-header {
-  border-bottom-color: #2c2c2c;
+  border-bottom-color: var(--box-header);;
   border-bottom-style: solid;
   border-bottom-width: thin;
   display: flex;
@@ -155,13 +153,13 @@ h2 {
 }
 
 .info-title {
-  color: #4e6e7d;
+  color: var(--info-title);
   font-size: 11px;
   text-transform: uppercase;
 }
 
 .info {
-  color: #8DABBA;
+  color: var(--info);
   font-size: 15px;
 }
 
