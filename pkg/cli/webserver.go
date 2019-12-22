@@ -29,7 +29,6 @@ func RunWebServerCmd() *cobra.Command {
 			mux.HandleFunc("/", handler.Index)
 			mux.HandleFunc("/login", handler.Login)
 			mux.HandleFunc("/peers/", handler.Peers)
-			// http.HandleFunc("/peers/", configurePeerHandler)
 			log.Printf("Starting the webserver at :%s ...", O.WebServer.HTTPPort)
 			return http.ListenAndServe(fmt.Sprintf(":%s", O.WebServer.HTTPPort), mux)
 		},

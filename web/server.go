@@ -2,7 +2,6 @@ package web
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -22,8 +21,6 @@ import (
 	"github.com/sandromello/wgadmin/pkg/util"
 	log "github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
-	"google.golang.org/api/oauth2/v2"
-	option "google.golang.org/api/option"
 )
 
 const (
@@ -32,6 +29,7 @@ const (
 	sessionMaxAgeInSeconds = 3600
 )
 
+// PageConfig is used to configure the content of the webapp
 type PageConfig struct {
 	FaviconURL        string
 	LogoURL           string
@@ -42,6 +40,7 @@ type PageConfig struct {
 	Title             string
 }
 
+// UserInfo represents an Google user
 type UserInfo struct {
 	jwt.StandardClaims
 
@@ -55,6 +54,7 @@ type UserInfo struct {
 	Picture       string `json:"picture"`
 }
 
+// ToJSON converts a *UserInfo to json
 func (u *UserInfo) ToJSON() []byte {
 	data, err := json.Marshal(u)
 	if err != nil {
@@ -63,6 +63,7 @@ func (u *UserInfo) ToJSON() []byte {
 	return data
 }
 
+// UnmarshalUserInfo unmarshal to *UserInfo type
 func UnmarshalUserInfo(data []byte) *UserInfo {
 	u := &UserInfo{}
 	if err := json.Unmarshal(data, u); err != nil {
@@ -85,44 +86,32 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case "POST":
+		// TODO: check for errors
 		session, _ := h.store.Get(r, "wgadmin")
 
 		if data, ok := session.Values["userinfo"]; ok {
 			u := UnmarshalUserInfo(data.([]byte))
 			if u != nil {
-				fmt.Println("Authenticated as:", u.Name)
+				log.Infof("User '%s' already logged in, redirecting ...", u.Name)
 				http.Redirect(w, r, "/", http.StatusSeeOther)
 				return
 			}
 		}
-
-		oauth2Service, err := oauth2.NewService(context.Background(), option.WithHTTPClient(http.DefaultClient))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
 		idToken := r.FormValue("id_token")
-		tokenInfoCall := oauth2Service.Tokeninfo().IdToken(idToken)
-		tokenInfo, err := tokenInfoCall.Do()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-		_ = tokenInfo
-		// jwt.ParseWithClaims()
 		token, err := jwt.ParseWithClaims(idToken, &UserInfo{}, func(token *jwt.Token) (interface{}, error) {
 			// Don't forget to validate the alg is what you expect:
-			return []byte(`foo`), nil
+			return []byte(``), nil
 		})
 		if u, ok := token.Claims.(*UserInfo); ok {
 			if u.GSuiteDomain != os.Getenv("GSUITE_DOMAIN") {
-				msg := fmt.Sprintf("not a permitted Gsuite domain, found: %v", u.GSuiteDomain)
+				msg := fmt.Sprintf("not a permitted gsuite domain, found: %v", u.GSuiteDomain)
 				http.Error(w, msg, http.StatusUnauthorized)
 				return
 			}
 			session.Values["userinfo"] = u.ToJSON()
 			if err := session.Save(r, w); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
 			}
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 		} else {
@@ -173,7 +162,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Login the login page
+// Login the webapp login page
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if os.Getenv("ENV") != "production" {
 		h.RenderTemplates()
@@ -196,7 +185,8 @@ func (h *Handler) getSessionUser(r *http.Request) (*UserInfo, error) {
 	return nil, nil
 }
 
-// Peers client configuration
+// Peers generates and retrieve wireguard client configurations,
+// only authenticated are allowed to download.
 func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 	u, err := h.getSessionUser(r)
 	if err != nil {
@@ -302,7 +292,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Error: failed parsing updated time for peer!", http.StatusInternalServerError)
 			return
 		}
-		if updAt.Add(time.Minute * 30).Before(time.Now().UTC()) {
+		if updAt.Add(time.Minute * 15).Before(time.Now().UTC()) {
 			msg := fmt.Sprintf("Error: secret has expired, updated at: %v!", peer.UpdatedAt)
 			http.Error(w, msg, http.StatusBadRequest)
 			return
