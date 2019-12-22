@@ -45,6 +45,8 @@ type CmdWebServer struct {
 	HTTPPort       string
 	AllowedDomains *[]string
 	PageConfig     web.PageConfig
+	TLSKeyFile     string
+	TLSCertFile    string
 }
 
 type CmdOptions struct {

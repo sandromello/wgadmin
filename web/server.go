@@ -38,6 +38,7 @@ type PageConfig struct {
 	GoogleRedirectURI string
 	TemplatePath      string
 	Title             string
+	NavBarLink string
 }
 
 // UserInfo represents an Google user
