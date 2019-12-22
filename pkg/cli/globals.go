@@ -42,8 +42,9 @@ type CmdConfigure struct {
 }
 
 type CmdWebServer struct {
-	HTTPPort   string
-	PageConfig web.PageConfig
+	HTTPPort       string
+	AllowedDomains *[]string
+	PageConfig     web.PageConfig
 }
 
 type CmdOptions struct {

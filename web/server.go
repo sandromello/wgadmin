@@ -74,9 +74,61 @@ func UnmarshalUserInfo(data []byte) *UserInfo {
 
 // Handler containing configuration for handlers
 type Handler struct {
-	tmpl       *template.Template
-	store      *sessions.CookieStore
-	pageConfig *PageConfig
+	tmpl           *template.Template
+	store          *sessions.CookieStore
+	pageConfig     *PageConfig
+	allowedDomains []string
+}
+
+// NewHandler creates a new handler
+func NewHandler(sessionKey []byte, pconfig *PageConfig, allowedDomains []string) *Handler {
+	if pconfig == nil {
+		log.Fatal("page config attribute is nil")
+	}
+	h := &Handler{
+		store:          sessions.NewCookieStore(sessionKey),
+		pageConfig:     pconfig,
+		allowedDomains: allowedDomains,
+	}
+
+	h.RenderTemplates()
+	h.store.MaxAge(sessionMaxAgeInSeconds)
+	return h
+}
+
+func (h *Handler) isAllowedDomain(email string) (bool, string) {
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return false, ""
+	}
+	for _, d := range h.allowedDomains {
+		if d == parts[1] {
+			return true, d
+		}
+	}
+	return false, parts[1]
+}
+
+func (h *Handler) getSessionUser(r *http.Request) (*UserInfo, error) {
+	session, err := h.store.Get(r, "wgadmin")
+	if err != nil {
+		return nil, err
+	}
+	if data, ok := session.Values["userinfo"]; ok {
+		return UnmarshalUserInfo(data.([]byte)), nil
+	}
+	return nil, nil
+}
+
+// RenderTemplates load all templates
+func (h *Handler) RenderTemplates() {
+	indexPage := filepath.Join("", h.pageConfig.TemplatePath, indexPageName)
+	loginPage := filepath.Join("", h.pageConfig.TemplatePath, loginPageName)
+	tmpl, err := template.New("").ParseFiles(indexPage, loginPage)
+	if err != nil {
+		log.Fatalf("failed rendering templates: %v", err)
+	}
+	h.tmpl = tmpl
 }
 
 // Index the main page
@@ -105,9 +157,13 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 			return []byte(``), nil
 		})
 		if u, ok := token.Claims.(*UserInfo); ok {
-			if u.GSuiteDomain != os.Getenv("GSUITE_DOMAIN") {
-				msg := fmt.Sprintf("not a permitted gsuite domain, found: %v", u.GSuiteDomain)
+			if ok, d := h.isAllowedDomain(u.Email); !ok {
+				msg := fmt.Sprintf("Users from domain %s aren't allowed to signin!", d)
 				http.Error(w, msg, http.StatusUnauthorized)
+				return
+			}
+			if !u.EmailVerified {
+				http.Error(w, "Email not verified", http.StatusUnauthorized)
 				return
 			}
 			session.Values["userinfo"] = u.ToJSON()
@@ -196,17 +252,6 @@ func (h *Handler) Signout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/signin", http.StatusSeeOther)
-}
-
-func (h *Handler) getSessionUser(r *http.Request) (*UserInfo, error) {
-	session, err := h.store.Get(r, "wgadmin")
-	if err != nil {
-		return nil, err
-	}
-	if data, ok := session.Values["userinfo"]; ok {
-		return UnmarshalUserInfo(data.([]byte)), nil
-	}
-	return nil, nil
 }
 
 // Peers generates and retrieve wireguard client configurations,
@@ -381,30 +426,4 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Not Implemented", http.StatusNotImplemented)
 	}
 
-}
-
-// NewHandler creates a new handler
-func NewHandler(sessionKey []byte, pconfig *PageConfig) *Handler {
-	if pconfig == nil {
-		log.Fatal("page config attribute is nil")
-	}
-	h := &Handler{
-		store:      sessions.NewCookieStore(sessionKey),
-		pageConfig: pconfig,
-	}
-
-	h.RenderTemplates()
-	h.store.MaxAge(sessionMaxAgeInSeconds)
-	return h
-}
-
-// RenderTemplates load all templates
-func (h *Handler) RenderTemplates() {
-	indexPage := filepath.Join("", h.pageConfig.TemplatePath, indexPageName)
-	loginPage := filepath.Join("", h.pageConfig.TemplatePath, loginPageName)
-	tmpl, err := template.New("").ParseFiles(indexPage, loginPage)
-	if err != nil {
-		log.Fatalf("failed rendering templates: %v", err)
-	}
-	h.tmpl = tmpl
 }

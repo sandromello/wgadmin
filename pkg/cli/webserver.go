@@ -25,7 +25,11 @@ func RunWebServerCmd() *cobra.Command {
 			fs := http.FileServer(http.Dir(staticDir))
 			mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
-			handler := web.NewHandler([]byte(`mykey`), &O.WebServer.PageConfig)
+			handler := web.NewHandler(
+				[]byte(`mykey`),
+				&O.WebServer.PageConfig,
+				*O.WebServer.AllowedDomains,
+			)
 			mux.HandleFunc("/", handler.Index)
 			mux.HandleFunc("/signin", handler.Signin)
 			mux.HandleFunc("/signout/", handler.Signout)
@@ -36,6 +40,7 @@ func RunWebServerCmd() *cobra.Command {
 	}
 	pagec := &O.WebServer.PageConfig
 	cmd.Flags().StringVar(&O.WebServer.HTTPPort, "port", "8000", "The port of the server.")
+	O.WebServer.AllowedDomains = cmd.Flags().StringSlice("allowed-domains", []string{}, "A list of permitted domains that will be able to sign in.")
 	cmd.Flags().StringVar(&pagec.GoogleClientID, "google-client-id", "", "The Google Client ID.")
 	cmd.Flags().StringVar(&pagec.GoogleRedirectURI, "google-redirect-uri", "", "The Google Redirect URI address.")
 	cmd.Flags().StringVar(&pagec.Title, "page-title", "VPN Service", "The title of the page.")
