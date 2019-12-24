@@ -1,0 +1,11 @@
+:root {
+  --background: linear-gradient(45deg, #13191f 0%, #2c2c2c 100%);
+  --link-color: #4e6e7d;
+  --link-color-pseudo-classes: #8dabba;
+  --navbar: #232323;
+  --box: #232323;
+  --box-color: #fff;
+  --box-header: #2c2c2c;
+  --info: #8dabba;
+  --info-title: #4e6e7d;
+}

@@ -1,4 +1,4 @@
-package web
+package webapp
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"html/template"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +25,7 @@ import (
 const (
 	indexPageName          = "index.html"
 	loginPageName          = "login.html"
+	errorPageName          = "error.html"
 	sessionMaxAgeInSeconds = 3600
 )
 
@@ -38,6 +38,7 @@ type PageConfig struct {
 	GoogleRedirectURI string
 	TemplatePath      string
 	Title             string
+	NavBarLink        string
 }
 
 // UserInfo represents an Google user
@@ -74,9 +75,62 @@ func UnmarshalUserInfo(data []byte) *UserInfo {
 
 // Handler containing configuration for handlers
 type Handler struct {
-	tmpl       *template.Template
-	store      *sessions.CookieStore
-	pageConfig *PageConfig
+	tmpl           *template.Template
+	store          *sessions.CookieStore
+	pageConfig     *PageConfig
+	allowedDomains []string
+}
+
+// NewHandler creates a new handler
+func NewHandler(sessionKey []byte, pconfig *PageConfig, allowedDomains []string) *Handler {
+	if pconfig == nil {
+		log.Fatal("page config attribute is nil")
+	}
+	h := &Handler{
+		store:          sessions.NewCookieStore(sessionKey),
+		pageConfig:     pconfig,
+		allowedDomains: allowedDomains,
+	}
+
+	h.RenderTemplates()
+	h.store.MaxAge(sessionMaxAgeInSeconds)
+	return h
+}
+
+func (h *Handler) isAllowedDomain(email string) (bool, string) {
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return false, ""
+	}
+	for _, d := range h.allowedDomains {
+		if d == parts[1] {
+			return true, d
+		}
+	}
+	return false, parts[1]
+}
+
+func (h *Handler) getSessionUser(r *http.Request) (*UserInfo, error) {
+	session, err := h.store.Get(r, "wgadmin")
+	if err != nil {
+		return nil, err
+	}
+	if data, ok := session.Values["userinfo"]; ok {
+		return UnmarshalUserInfo(data.([]byte)), nil
+	}
+	return nil, nil
+}
+
+// RenderTemplates load all templates
+func (h *Handler) RenderTemplates() {
+	indexPage := filepath.Join("", h.pageConfig.TemplatePath, indexPageName)
+	loginPage := filepath.Join("", h.pageConfig.TemplatePath, loginPageName)
+	errorPage := filepath.Join("", h.pageConfig.TemplatePath, errorPageName)
+	tmpl, err := template.New("").ParseFiles(indexPage, loginPage, errorPage)
+	if err != nil {
+		log.Fatalf("failed rendering templates: %v", err)
+	}
+	h.tmpl = tmpl
 }
 
 // Index the main page
@@ -86,58 +140,67 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case "POST":
-		// TODO: check for errors
-		session, _ := h.store.Get(r, "wgadmin")
-
+		session, err := h.store.Get(r, "wgadmin")
+		if err != nil {
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		if data, ok := session.Values["userinfo"]; ok {
 			u := UnmarshalUserInfo(data.([]byte))
 			if u != nil {
-				log.Infof("User '%s' already logged in, redirecting ...", u.Name)
+				expireAt := time.Unix(u.ExpiresAt, 0).Sub(time.Now().UTC())
+				log.Infof("user %s already logged in, expires in %v minute(s). Redirecting ...", u.Email, int(expireAt.Minutes()))
 				http.Redirect(w, r, "/", http.StatusSeeOther)
 				return
 			}
 		}
 		idToken := r.FormValue("id_token")
 		token, err := jwt.ParseWithClaims(idToken, &UserInfo{}, func(token *jwt.Token) (interface{}, error) {
-			// Don't forget to validate the alg is what you expect:
 			return []byte(``), nil
 		})
 		if u, ok := token.Claims.(*UserInfo); ok {
-			if u.GSuiteDomain != os.Getenv("GSUITE_DOMAIN") {
-				msg := fmt.Sprintf("not a permitted gsuite domain, found: %v", u.GSuiteDomain)
-				http.Error(w, msg, http.StatusUnauthorized)
+			if ok, d := h.isAllowedDomain(u.Email); !ok {
+				msg := fmt.Sprintf("Users from domain %s aren't allowed to signin!", d)
+				h.httpError(w, msg, http.StatusUnauthorized)
+				return
+			}
+			if !u.EmailVerified {
+				h.httpError(w, "Email not verified", http.StatusUnauthorized)
 				return
 			}
 			session.Values["userinfo"] = u.ToJSON()
+			expireAt := time.Unix(u.ExpiresAt, 0).Sub(time.Now().UTC())
+			log.Infof("user %v signed in, expires in %v minutes", u.Email, int(expireAt.Minutes()))
+			session.Options.MaxAge = int(expireAt.Seconds())
 			if err := session.Save(r, w); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				h.httpError(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 		}
 	case "GET":
 		u, err := h.getSessionUser(r)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if u == nil {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Redirect(w, r, "/signin", http.StatusSeeOther)
 			return
 		}
 		// TODO: refactor
 		configPath := filepath.Join(os.Getenv("$HOME/.wgapp/"), store.DBFileName)
 		client, err := storeclient.New(configPath, &bolt.Options{OpenFile: storeclient.FetchFromGCS})
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer client.Close()
 		peerList, err := client.Peer().List()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -156,14 +219,13 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		}); err != nil {
 			log.Errorf("failed executing template: %v", err)
 		}
-
 	default:
-		http.Error(w, "Method Not Implemented", http.StatusNotImplemented)
+		h.httpError(w, "Method Not Implemented", http.StatusNotImplemented)
 	}
 }
 
-// Login the webapp login page
-func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+// Signin the webapp login page
+func (h *Handler) Signin(w http.ResponseWriter, r *http.Request) {
 	if os.Getenv("ENV") != "production" {
 		h.RenderTemplates()
 	}
@@ -174,15 +236,24 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) getSessionUser(r *http.Request) (*UserInfo, error) {
+// Signout removes data from session
+func (h *Handler) Signout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		h.httpError(w, "Method Not Implemented", http.StatusNotImplemented)
+		return
+	}
 	session, err := h.store.Get(r, "wgadmin")
 	if err != nil {
-		return nil, err
+		h.httpError(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-	if data, ok := session.Values["userinfo"]; ok {
-		return UnmarshalUserInfo(data.([]byte)), nil
+	// Delete Session
+	session.Options.MaxAge = -1
+	if err := session.Save(r, w); err != nil {
+		h.httpError(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-	return nil, nil
+	http.Redirect(w, r, "/signin", http.StatusSeeOther)
 }
 
 // Peers generates and retrieve wireguard client configurations,
@@ -190,17 +261,17 @@ func (h *Handler) getSessionUser(r *http.Request) (*UserInfo, error) {
 func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 	u, err := h.getSessionUser(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.httpError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if u == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		http.Redirect(w, r, "/signin", http.StatusSeeOther)
 		return
 	}
 	configPath := filepath.Join(os.Getenv("$HOME/.wgapp/"), store.DBFileName)
 	client, err := storeclient.New(configPath, &bolt.Options{OpenFile: storeclient.FetchFromGCS})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.httpError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer client.Close()
@@ -211,33 +282,32 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		peerUID := r.FormValue("peer_uid")
 		peer, err := client.Peer().Get(peerUID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		// TODO: check if peer has MFA enabled!
-		// TODO: check if e-mail is verified
 		if peer == nil {
-			redirectTo := fmt.Sprintf("?err=%s", url.QueryEscape("Peer not found"))
-			http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+			h.httpError(w, "Peer not found!", http.StatusNotFound)
+			return
+		}
+		if !u.EmailVerified {
+			h.httpError(w, "E-mail not verified!", http.StatusUnauthorized)
 			return
 		}
 		log.Infof("got peer=%v, found=%v", peerUID, peer.UID)
 		parts := strings.Split(peer.UID, "/")
 		if len(parts) == 2 && parts[1] != u.Email {
-			redirectTo := fmt.Sprintf("?err=%s", url.QueryEscape("Peer doesn't match with email"))
-			http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+			h.httpError(w, "Peer doesn't match with email", http.StatusUnauthorized)
 			return
 		}
 		if peer.Status == api.PeerStatusBlocked {
-			redirectTo := fmt.Sprintf("?err=%s", url.QueryEscape("Peer blocked"))
-			http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+			msg := fmt.Sprintf("Peer %s is blocked!", peer.UID)
+			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
 		// Reset Peer
 		randomString, err := util.GenerateRandomString(50)
 		if err != nil {
-			redirectTo := fmt.Sprintf("?err=%s", url.QueryEscape(err.Error()))
-			http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -246,13 +316,11 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		peer.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 		peer.SecretValue = fmt.Sprintf("%s.conf", randomString)
 		if err := client.Peer().Update(peer); err != nil {
-			redirectTo := fmt.Sprintf("?err=%s", url.QueryEscape(err.Error()))
-			http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if err := client.SyncRemote(); err != nil {
-			redirectTo := fmt.Sprintf("?err=%s", url.QueryEscape(err.Error()))
-			http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		redirectURL := fmt.Sprintf("/peers/%s?vpn=%s", peer.SecretValue, peer.GetServer())
@@ -260,13 +328,13 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		peerList, err := client.Peer().List()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		var peer *api.Peer
 		secretParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 		if secretParts[1] == "" {
-			http.Error(w, "Not Found", http.StatusNotFound)
+			h.httpError(w, "Not Found", http.StatusNotFound)
 			return
 		}
 		for _, p := range peerList {
@@ -280,27 +348,27 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if peer == nil {
-			http.Error(w, "Error: peer not found for this token.", http.StatusNotFound)
+			h.httpError(w, "Error: peer not found for this token.", http.StatusNotFound)
 			return
 		}
 		if peer.Status == api.PeerStatusBlocked {
-			http.Error(w, "Error: peer blocked, contact the administrator!", http.StatusBadRequest)
+			h.httpError(w, "Error: peer blocked, contact the administrator!", http.StatusBadRequest)
 			return
 		}
 		updAt, err := time.Parse(time.RFC3339, peer.UpdatedAt)
 		if err != nil {
-			http.Error(w, "Error: failed parsing updated time for peer!", http.StatusInternalServerError)
+			h.httpError(w, "Error: failed parsing updated time for peer!", http.StatusInternalServerError)
 			return
 		}
 		if updAt.Add(time.Minute * 15).Before(time.Now().UTC()) {
 			msg := fmt.Sprintf("Error: secret has expired, updated at: %v!", peer.UpdatedAt)
-			http.Error(w, msg, http.StatusBadRequest)
+			h.httpError(w, msg, http.StatusBadRequest)
 			return
 		}
 
 		clientPrivkey, err := api.GeneratePrivateKey()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -308,12 +376,12 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		wgsc, err := client.WireguardServerConfig().Get(vpn)
 		if wgsc == nil && err == nil {
 			msg := fmt.Sprintf("Error: the wireguard server %q doesn't exists", vpn)
-			http.Error(w, msg, http.StatusBadRequest)
+			h.httpError(w, msg, http.StatusBadRequest)
 			return
 		}
 		if err != nil {
 			msg := fmt.Sprintf("Error: failed retrieving wireguard server config object: %v", err)
-			http.Error(w, msg, http.StatusInternalServerError)
+			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
 
@@ -326,7 +394,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			"AllowedIPs": "0.0.0.0/0, ::/0",
 		})
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		pubkey := clientPrivkey.PublicKey()
@@ -337,12 +405,12 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		peer.SecretValue = ""
 		if err := client.Peer().Update(peer); err != nil {
 			msg := fmt.Sprintf("Error: failed updating peer: %v", err)
-			http.Error(w, msg, http.StatusInternalServerError)
+			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
 		if err := client.SyncRemote(); err != nil {
 			msg := fmt.Sprintf("Error: failed syncing with GCS: %v", err)
-			http.Error(w, msg, http.StatusInternalServerError)
+			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -354,32 +422,20 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
 		io.Copy(w, bytes.NewBuffer(data))
 	default:
-		http.Error(w, "Not Implemented", http.StatusNotImplemented)
+		h.httpError(w, "Not Implemented", http.StatusNotImplemented)
 	}
-
 }
 
-// NewHandler creates a new handler
-func NewHandler(sessionKey []byte, pconfig *PageConfig) *Handler {
-	if pconfig == nil {
-		log.Fatal("page config attribute is nil")
+func (h *Handler) httpError(w http.ResponseWriter, msg string, code int) {
+	if os.Getenv("ENV") != "production" {
+		h.RenderTemplates()
 	}
-	h := &Handler{
-		store:      sessions.NewCookieStore(sessionKey),
-		pageConfig: pconfig,
+	w.WriteHeader(code)
+	if err := h.tmpl.ExecuteTemplate(w, errorPageName, map[string]interface{}{
+		"PageConfig": h.pageConfig,
+		"StatusCode": code,
+		"Message":    msg,
+	}); err != nil {
+		log.Errorf("failed executing template: %v", err)
 	}
-	h.RenderTemplates()
-	h.store.MaxAge(sessionMaxAgeInSeconds)
-	return h
-}
-
-// RenderTemplates load all templates
-func (h *Handler) RenderTemplates() {
-	indexPage := filepath.Join("", h.pageConfig.TemplatePath, indexPageName)
-	loginPage := filepath.Join("", h.pageConfig.TemplatePath, loginPageName)
-	tmpl, err := template.New("").ParseFiles(indexPage, loginPage)
-	if err != nil {
-		log.Fatalf("failed rendering templates: %v", err)
-	}
-	h.tmpl = tmpl
 }
