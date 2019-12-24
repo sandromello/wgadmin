@@ -67,20 +67,20 @@ h2 {
 }
 
 .icon-signout {
-  -webkit-mask: url(../../img/icons/sign-in-alt.svg);
-  mask: url(../../img/icons/sign-in-alt.svg);
+  -webkit-mask: url(../../img/icons/sign-in-alt.svg) no-repeat;
+  mask: url(../../img/icons/sign-in-alt.svg) no-repeat;
 }
 
 .icon-download {
-  -webkit-mask: url(../../img/icons/download-solid.svg);
-  mask: url(../../img/icons/download-solid.svg);
+  -webkit-mask: url(../../img/icons/download-solid.svg) no-repeat;
+  mask: url(../../img/icons/download-solid.svg) no-repeat;
 }
 
 .icon-vpn {
   width: 15px;
   height: 15px;
-  -webkit-mask: url(../../img/icons/dot-circle-solid.svg);
-  mask: url(../../img/icons/dot-circle-solid.svg);
+  -webkit-mask: url(../../img/icons/dot-circle-solid.svg) no-repeat;
+  mask: url(../../img/icons/dot-circle-solid.svg) no-repeat;
 }
 
 .icon-vpn-expired {

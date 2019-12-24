@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"path"
 
-	"github.com/sandromello/wgadmin/web"
+	"github.com/sandromello/wgadmin/pkg/webapp"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +26,7 @@ func RunWebServerCmd() *cobra.Command {
 			fs := http.FileServer(http.Dir(staticDir))
 			mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
-			handler := web.NewHandler(
+			handler := webapp.NewHandler(
 				[]byte(`mykey`),
 				&O.WebServer.PageConfig,
 				*O.WebServer.AllowedDomains,
@@ -57,8 +57,8 @@ func RunWebServerCmd() *cobra.Command {
 	cmd.Flags().StringVar(&pagec.GoogleRedirectURI, "google-redirect-uri", "", "The Google Redirect URI address.")
 	cmd.Flags().StringVar(&pagec.Title, "page-title", "VPN Service", "The title of the page.")
 	cmd.Flags().StringVar(&pagec.TemplatePath, "template-path", "web/templates", "The path of html file templates.")
-	cmd.Flags().StringVar(&pagec.ThemeCSSURL, "theme-css-url", "static/themes/default/styles.css", "The CSS theme.")
-	cmd.Flags().StringVar(&pagec.LogoURL, "logo-url", "static/img/logo.png", "The logo URL.")
+	cmd.Flags().StringVar(&pagec.ThemeCSSURL, "theme-css-url", "/static/themes/default/styles.css", "The CSS theme.")
+	cmd.Flags().StringVar(&pagec.LogoURL, "logo-url", "/static/img/logo.png", "The logo URL.")
 	cmd.Flags().StringVar(&pagec.FaviconURL, "favicon-url", "", "The favicon URL.")
 	cmd.Flags().StringVar(&pagec.NavBarLink, "navbar-link", "https://github.com/sandromello/wgadmin", "Custom link for the navbar logo.")
 	return cmd

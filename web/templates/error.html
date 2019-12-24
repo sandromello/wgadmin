@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>{{ .PageConfig.Title }}</title>
+    <link rel="stylesheet" href="{{ .PageConfig.ThemeCSSURL }}">
+    <link rel='icon' type='image/png' href='{{ .PageConfig.FaviconURL }}' />
+  </head>
+  <body>
+    <div style="text-align: center">
+      <span class="info-title" style="color: coral; font-size: 80px">
+        {{ .StatusCode }}
+      </span>
+      <div style="max-width: 450px;">
+        <h3 style="color: white; font-weight: 300; margin: 0">{{ .Message }}</h3>
+      </div>
+      <div style="padding:35px">
+        <a href="/" style="font-size: 18px; margin: 10">Reload</span>
+      </div>
+    </div>
+  </body>
+</html>

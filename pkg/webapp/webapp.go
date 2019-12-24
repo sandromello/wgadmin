@@ -1,4 +1,4 @@
-package web
+package webapp
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"html/template"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +25,7 @@ import (
 const (
 	indexPageName          = "index.html"
 	loginPageName          = "login.html"
+	errorPageName          = "error.html"
 	sessionMaxAgeInSeconds = 3600
 )
 
@@ -38,7 +38,7 @@ type PageConfig struct {
 	GoogleRedirectURI string
 	TemplatePath      string
 	Title             string
-	NavBarLink string
+	NavBarLink        string
 }
 
 // UserInfo represents an Google user
@@ -125,7 +125,8 @@ func (h *Handler) getSessionUser(r *http.Request) (*UserInfo, error) {
 func (h *Handler) RenderTemplates() {
 	indexPage := filepath.Join("", h.pageConfig.TemplatePath, indexPageName)
 	loginPage := filepath.Join("", h.pageConfig.TemplatePath, loginPageName)
-	tmpl, err := template.New("").ParseFiles(indexPage, loginPage)
+	errorPage := filepath.Join("", h.pageConfig.TemplatePath, errorPageName)
+	tmpl, err := template.New("").ParseFiles(indexPage, loginPage, errorPage)
 	if err != nil {
 		log.Fatalf("failed rendering templates: %v", err)
 	}
@@ -141,7 +142,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		session, err := h.store.Get(r, "wgadmin")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if data, ok := session.Values["userinfo"]; ok {
@@ -160,11 +161,11 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		if u, ok := token.Claims.(*UserInfo); ok {
 			if ok, d := h.isAllowedDomain(u.Email); !ok {
 				msg := fmt.Sprintf("Users from domain %s aren't allowed to signin!", d)
-				http.Error(w, msg, http.StatusUnauthorized)
+				h.httpError(w, msg, http.StatusUnauthorized)
 				return
 			}
 			if !u.EmailVerified {
-				http.Error(w, "Email not verified", http.StatusUnauthorized)
+				h.httpError(w, "Email not verified", http.StatusUnauthorized)
 				return
 			}
 			session.Values["userinfo"] = u.ToJSON()
@@ -172,17 +173,17 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 			log.Infof("user %v signed in, expires in %v minutes", u.Email, int(expireAt.Minutes()))
 			session.Options.MaxAge = int(expireAt.Seconds())
 			if err := session.Save(r, w); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				h.httpError(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 		}
 	case "GET":
 		u, err := h.getSessionUser(r)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if u == nil {
@@ -193,13 +194,13 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		configPath := filepath.Join(os.Getenv("$HOME/.wgapp/"), store.DBFileName)
 		client, err := storeclient.New(configPath, &bolt.Options{OpenFile: storeclient.FetchFromGCS})
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer client.Close()
 		peerList, err := client.Peer().List()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -219,7 +220,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 			log.Errorf("failed executing template: %v", err)
 		}
 	default:
-		http.Error(w, "Method Not Implemented", http.StatusNotImplemented)
+		h.httpError(w, "Method Not Implemented", http.StatusNotImplemented)
 	}
 }
 
@@ -238,18 +239,18 @@ func (h *Handler) Signin(w http.ResponseWriter, r *http.Request) {
 // Signout removes data from session
 func (h *Handler) Signout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		http.Error(w, "Method Not Implemented", http.StatusNotImplemented)
+		h.httpError(w, "Method Not Implemented", http.StatusNotImplemented)
 		return
 	}
 	session, err := h.store.Get(r, "wgadmin")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.httpError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	// Delete Session
 	session.Options.MaxAge = -1
 	if err := session.Save(r, w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.httpError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	http.Redirect(w, r, "/signin", http.StatusSeeOther)
@@ -260,7 +261,7 @@ func (h *Handler) Signout(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 	u, err := h.getSessionUser(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.httpError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if u == nil {
@@ -270,7 +271,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 	configPath := filepath.Join(os.Getenv("$HOME/.wgapp/"), store.DBFileName)
 	client, err := storeclient.New(configPath, &bolt.Options{OpenFile: storeclient.FetchFromGCS})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.httpError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer client.Close()
@@ -281,33 +282,32 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		peerUID := r.FormValue("peer_uid")
 		peer, err := client.Peer().Get(peerUID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		// TODO: check if peer has MFA enabled!
-		// TODO: check if e-mail is verified
 		if peer == nil {
-			redirectTo := fmt.Sprintf("?err=%s", url.QueryEscape("Peer not found"))
-			http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+			h.httpError(w, "Peer not found!", http.StatusNotFound)
+			return
+		}
+		if !u.EmailVerified {
+			h.httpError(w, "E-mail not verified!", http.StatusUnauthorized)
 			return
 		}
 		log.Infof("got peer=%v, found=%v", peerUID, peer.UID)
 		parts := strings.Split(peer.UID, "/")
 		if len(parts) == 2 && parts[1] != u.Email {
-			redirectTo := fmt.Sprintf("?err=%s", url.QueryEscape("Peer doesn't match with email"))
-			http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+			h.httpError(w, "Peer doesn't match with email", http.StatusUnauthorized)
 			return
 		}
 		if peer.Status == api.PeerStatusBlocked {
-			redirectTo := fmt.Sprintf("?err=%s", url.QueryEscape("Peer blocked"))
-			http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+			msg := fmt.Sprintf("Peer %s is blocked!", peer.UID)
+			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
 		// Reset Peer
 		randomString, err := util.GenerateRandomString(50)
 		if err != nil {
-			redirectTo := fmt.Sprintf("?err=%s", url.QueryEscape(err.Error()))
-			http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -316,13 +316,11 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		peer.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 		peer.SecretValue = fmt.Sprintf("%s.conf", randomString)
 		if err := client.Peer().Update(peer); err != nil {
-			redirectTo := fmt.Sprintf("?err=%s", url.QueryEscape(err.Error()))
-			http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if err := client.SyncRemote(); err != nil {
-			redirectTo := fmt.Sprintf("?err=%s", url.QueryEscape(err.Error()))
-			http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		redirectURL := fmt.Sprintf("/peers/%s?vpn=%s", peer.SecretValue, peer.GetServer())
@@ -330,13 +328,13 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		peerList, err := client.Peer().List()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		var peer *api.Peer
 		secretParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 		if secretParts[1] == "" {
-			http.Error(w, "Not Found", http.StatusNotFound)
+			h.httpError(w, "Not Found", http.StatusNotFound)
 			return
 		}
 		for _, p := range peerList {
@@ -350,27 +348,27 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if peer == nil {
-			http.Error(w, "Error: peer not found for this token.", http.StatusNotFound)
+			h.httpError(w, "Error: peer not found for this token.", http.StatusNotFound)
 			return
 		}
 		if peer.Status == api.PeerStatusBlocked {
-			http.Error(w, "Error: peer blocked, contact the administrator!", http.StatusBadRequest)
+			h.httpError(w, "Error: peer blocked, contact the administrator!", http.StatusBadRequest)
 			return
 		}
 		updAt, err := time.Parse(time.RFC3339, peer.UpdatedAt)
 		if err != nil {
-			http.Error(w, "Error: failed parsing updated time for peer!", http.StatusInternalServerError)
+			h.httpError(w, "Error: failed parsing updated time for peer!", http.StatusInternalServerError)
 			return
 		}
 		if updAt.Add(time.Minute * 15).Before(time.Now().UTC()) {
 			msg := fmt.Sprintf("Error: secret has expired, updated at: %v!", peer.UpdatedAt)
-			http.Error(w, msg, http.StatusBadRequest)
+			h.httpError(w, msg, http.StatusBadRequest)
 			return
 		}
 
 		clientPrivkey, err := api.GeneratePrivateKey()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -378,12 +376,12 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		wgsc, err := client.WireguardServerConfig().Get(vpn)
 		if wgsc == nil && err == nil {
 			msg := fmt.Sprintf("Error: the wireguard server %q doesn't exists", vpn)
-			http.Error(w, msg, http.StatusBadRequest)
+			h.httpError(w, msg, http.StatusBadRequest)
 			return
 		}
 		if err != nil {
 			msg := fmt.Sprintf("Error: failed retrieving wireguard server config object: %v", err)
-			http.Error(w, msg, http.StatusInternalServerError)
+			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
 
@@ -396,7 +394,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			"AllowedIPs": "0.0.0.0/0, ::/0",
 		})
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		pubkey := clientPrivkey.PublicKey()
@@ -407,12 +405,12 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		peer.SecretValue = ""
 		if err := client.Peer().Update(peer); err != nil {
 			msg := fmt.Sprintf("Error: failed updating peer: %v", err)
-			http.Error(w, msg, http.StatusInternalServerError)
+			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
 		if err := client.SyncRemote(); err != nil {
 			msg := fmt.Sprintf("Error: failed syncing with GCS: %v", err)
-			http.Error(w, msg, http.StatusInternalServerError)
+			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -424,7 +422,20 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
 		io.Copy(w, bytes.NewBuffer(data))
 	default:
-		http.Error(w, "Not Implemented", http.StatusNotImplemented)
+		h.httpError(w, "Not Implemented", http.StatusNotImplemented)
 	}
+}
 
+func (h *Handler) httpError(w http.ResponseWriter, msg string, code int) {
+	if os.Getenv("ENV") != "production" {
+		h.RenderTemplates()
+	}
+	w.WriteHeader(code)
+	if err := h.tmpl.ExecuteTemplate(w, errorPageName, map[string]interface{}{
+		"PageConfig": h.pageConfig,
+		"StatusCode": code,
+		"Message":    msg,
+	}); err != nil {
+		log.Errorf("failed executing template: %v", err)
+	}
 }

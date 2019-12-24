@@ -7,7 +7,7 @@ import (
 
 	"github.com/sandromello/wgadmin/pkg/store"
 	storeclient "github.com/sandromello/wgadmin/pkg/store/client"
-	"github.com/sandromello/wgadmin/web"
+	"github.com/sandromello/wgadmin/pkg/webapp"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -44,7 +44,7 @@ type CmdConfigure struct {
 type CmdWebServer struct {
 	HTTPPort       string
 	AllowedDomains *[]string
-	PageConfig     web.PageConfig
+	PageConfig     webapp.PageConfig
 	TLSKeyFile     string
 	TLSCertFile    string
 }
