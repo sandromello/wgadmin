@@ -26,7 +26,7 @@ func hashFromByte(data []byte) string {
 	return string(s.Sum(nil))
 }
 
-func fetchState(server, configFile string) ([]byte, []byte, error) {
+func fetchState(server, configFile, cipherKey string) ([]byte, []byte, error) {
 	localConfigData, err := ioutil.ReadFile(configFile)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, nil, err
@@ -44,7 +44,7 @@ func fetchState(server, configFile string) ([]byte, []byte, error) {
 	if wgsc == nil {
 		return nil, nil, fmt.Errorf("wireguard server %q not found", server)
 	}
-	remoteConfigData, err := wgsc.ParseWireguardServerConfigTemplate()
+	remoteConfigData, err := wgsc.ParseWireguardServerConfigTemplate(cipherKey)
 	return localConfigData, remoteConfigData, err
 }
 
@@ -144,7 +144,7 @@ func ConfigureServerCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conciliate := func(logf *log.Entry) error {
 				logf.Infof("Configuring server %s ...", args[0])
-				localData, remoteData, err := fetchState(args[0], O.Configure.ConfigFile)
+				localData, remoteData, err := fetchState(args[0], O.Configure.ConfigFile, O.Configure.CipherKey)
 				if err != nil {
 					return err
 				}
@@ -180,6 +180,7 @@ func ConfigureServerCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&O.Configure.ConfigFile, "config", "/etc/wireguard/wg0.conf", "The wireguard server config file path.")
+	cmd.Flags().StringVar(&O.Configure.CipherKey, "cipher-key", os.Getenv("CIPHER_KEY"), "The base64 encoded cipher key used to decrypt the private key, it could be set using CIPHER_KEY environment variable.")
 	cmd.Flags().DurationVar(&O.Configure.Sync, "sync", time.Duration(0), "If enable will run a control loop watching the changes from remote.")
 	return cmd
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sandromello/wgadmin/pkg/util"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -29,11 +30,21 @@ PostDown = iptables -D FORWARD -i %i -j ACCEPT
 	if err != nil {
 		t.Fatalf("failed parsing key: %v", err)
 	}
+	cipherKey, err := util.NewAESCipherKey("")
+	if err != nil {
+		t.Fatalf("failed generating cipher key: %v", err)
+	}
+	encPK, err := cipherKey.EncryptMessage(pk.String())
+	if err != nil {
+		t.Fatalf("failed encrypting private key: %v", err)
+	}
 	w := &WireguardServerConfig{
-		UID:        "foo",
-		Address:    ParseCIDR("10.100.0.10/32"),
-		ListenPort: 51820,
-		PrivateKey: &pk,
+		Metadata: Metadata{
+			UID: "foo",
+		},
+		Address:             ParseCIDR("10.100.0.10/32").String(),
+		ListenPort:          51820,
+		EncryptedPrivateKey: encPK,
 		PostUp: []string{
 			"ip link set mtu 1500 dev ens4",
 			"ip link set mtu 1500 dev %i",
@@ -45,11 +56,11 @@ PostDown = iptables -D FORWARD -i %i -j ACCEPT
 			"iptables -D FORWARD -i %i -j ACCEPT",
 		},
 	}
-	var buf bytes.Buffer
-	if err := HandleTemplates(string(templateWireguardServerConfig), &buf, w); err != nil {
+	configData, err := w.ParseWireguardServerConfigTemplate(cipherKey.String())
+	if err != nil {
 		t.Fatalf("failed handling template: %v", err)
 	}
-	if diff := cmp.Diff(string(expOutput), buf.String()); diff != "" {
+	if diff := cmp.Diff(string(expOutput), string(configData)); diff != "" {
 		t.Fatalf("unexpected ini output (-want +got):\n%s", diff)
 	}
 }

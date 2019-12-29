@@ -229,12 +229,32 @@ func (w *WireguardServerConfig) WriteToIniFile(filePath string) error {
 }
 
 // ParseWireguardServerConfigTemplate parse to []byte the wireguard server config template
-func (w *WireguardServerConfig) ParseWireguardServerConfigTemplate() ([]byte, error) {
+func (w *WireguardServerConfig) ParseWireguardServerConfigTemplate(cipherKey string) ([]byte, error) {
 	var buf bytes.Buffer
+	privKey, err := w.DecryptPrivateKey(cipherKey)
+	if err != nil {
+		return nil, err
+	}
+	w.PrivateKey = &privKey
 	if err := HandleTemplates(string(templateWireguardServerConfig), &buf, w); err != nil {
+		w.PrivateKey = nil
 		return nil, fmt.Errorf("failed parsing template: %v", err)
 	}
+	w.PrivateKey = nil
 	return buf.Bytes(), nil
+}
+
+// DecryptPrivateKey decrypt the private key using the given cipher key
+func (w *WireguardServerConfig) DecryptPrivateKey(cipherKey string) (Key, error) {
+	cipher, err := util.NewAESCipherKey(cipherKey)
+	if err != nil {
+		return Key{}, fmt.Errorf("failed creating cipher key: %v", err)
+	}
+	privKeyEncoded, err := cipher.DecryptMessage(w.EncryptedPrivateKey)
+	if err != nil {
+		return Key{}, fmt.Errorf("failed decrypting private key: %v", err)
+	}
+	return ParseKey(privKeyEncoded)
 }
 
 // ParseWireguardClientConfigTemplate parse to []byte the wireguard client config template

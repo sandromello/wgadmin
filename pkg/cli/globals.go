@@ -18,6 +18,7 @@ type CmdServer struct {
 	PeerExpireActionType string
 	InterfaceName        string
 	Override             bool
+	CipherKey            string
 }
 
 type CmdPeer struct {
@@ -38,6 +39,7 @@ func (c *CmdPeer) ParseExpireDuration(defaultDuration string) time.Duration {
 type CmdConfigure struct {
 	ConfigFile    string
 	InterfaceName string
+	CipherKey     string
 	Sync          time.Duration
 }
 
