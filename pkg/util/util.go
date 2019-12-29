@@ -1,11 +1,118 @@
 package util
 
 import (
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"time"
 )
+
+type CipherKey struct {
+	Key []byte
+}
+
+func pad(src []byte) []byte {
+	padding := aes.BlockSize - len(src)%aes.BlockSize
+	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
+	return append(src, padtext...)
+}
+
+func unpad(src []byte) ([]byte, error) {
+	length := len(src)
+	unpadding := int(src[length-1])
+
+	if unpadding > length {
+		return nil, errors.New("unpad error. This could happen when incorrect encryption key is used")
+	}
+
+	return src[:(length - unpadding)], nil
+}
+
+// NewAESCipherKey will generate a random safe string if the key is empty,
+// otherwise it will as the cipher key
+func NewAESCipherKey(base64Key string) (*CipherKey, error) {
+	var cipherKey [sha256.Size]byte
+	if base64Key == "" {
+		randomSafeKey, err := GenerateRandomString(32)
+		// fmt.Println("RANDOMSTR:", base64.StdEncoding.EncodeToString([]byte(randomSafeKey)))
+		if err != nil {
+			return nil, err
+		}
+		cipherKey = sha256.Sum256([]byte(randomSafeKey))
+
+	} else {
+		key, err := base64.StdEncoding.DecodeString(base64Key)
+		if err != nil {
+			return nil, err
+		}
+		copy(cipherKey[:], key)
+	}
+
+	ck := &CipherKey{
+		Key: []byte(cipherKey[:]),
+	}
+	fmt.Println("CIPHERENCODED:", ck.String())
+	return ck, nil
+}
+
+func (k *CipherKey) EncryptMessage(rawText string) (string, error) {
+	block, err := aes.NewCipher(k.Key)
+	if err != nil {
+		return "", err
+	}
+
+	msg := pad([]byte(rawText))
+	ciphertext := make([]byte, aes.BlockSize+len(msg))
+	iv := ciphertext[:aes.BlockSize]
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		return "", err
+	}
+
+	cfb := cipher.NewCFBEncrypter(block, iv)
+	cfb.XORKeyStream(ciphertext[aes.BlockSize:], []byte(msg))
+	finalMsg := base64.StdEncoding.EncodeToString(ciphertext)
+	return finalMsg, nil
+}
+
+func (k *CipherKey) DecryptMessage(encryptedText string) (string, error) {
+	block, err := aes.NewCipher(k.Key)
+	if err != nil {
+		return "", err
+	}
+
+	decodedMsg, err := base64.StdEncoding.DecodeString(encryptedText)
+	if err != nil {
+		return "", err
+	}
+
+	if (len(decodedMsg) % aes.BlockSize) != 0 {
+		return "", errors.New("blocksize must be multipe of decoded message length")
+	}
+
+	iv := decodedMsg[:aes.BlockSize]
+	msg := decodedMsg[aes.BlockSize:]
+
+	cfb := cipher.NewCFBDecrypter(block, iv)
+	cfb.XORKeyStream(msg, msg)
+
+	unpadMsg, err := unpad(msg)
+	if err != nil {
+		return "", err
+	}
+
+	return string(unpadMsg), nil
+}
+
+func (k *CipherKey) String() string {
+	return base64.StdEncoding.EncodeToString(k.Key)
+}
 
 // GenerateRandomString returns a URL-safe, base64 encoded
 // securely generated random string.

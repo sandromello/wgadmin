@@ -301,7 +301,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		}
 		if peer.Status == api.PeerStatusBlocked {
 			msg := fmt.Sprintf("Peer %s is blocked!", peer.UID)
-			h.httpError(w, msg, http.StatusInternalServerError)
+			h.httpError(w, msg, http.StatusForbidden)
 			return
 		}
 		// Reset Peer
@@ -387,7 +387,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 
 		data, err := api.ParseWireguardClientConfigTemplate(map[string]interface{}{
 			"PrivateKey": clientPrivkey,
-			"PublicKey":  wgsc.PrivateKey.PublicKey(),
+			"PublicKey":  wgsc.PublicKey.String(),
 			"Address":    peer.AllowedIPs.String(),
 			"DNS":        "1.1.1.1, 8.8.8.8",
 			"Endpoint":   wgsc.PublicEndpoint,

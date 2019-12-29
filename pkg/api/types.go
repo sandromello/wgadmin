@@ -56,12 +56,14 @@ const (
 type WireguardServerConfig struct {
 	Metadata `json:",inline"`
 
-	Address        string   `json:"address"`
-	ListenPort     int      `json:"listenPort"`
-	PrivateKey     *Key     `json:"privateKey"`
-	PostUp         []string `json:"postUp"`
-	PostDown       []string `json:"postDown"`
-	PublicEndpoint string   `json:"publicEndpoint"`
+	Address             string   `json:"address"`
+	ListenPort          int      `json:"listenPort"`
+	EncryptedPrivateKey string   `json:"encryptedPrivateKey"`
+	PrivateKey          *Key     `json:"privateKey"` // TODO: remove in flavor of EncryptedPrivateKey
+	PublicKey           *Key     `json:"publicKey"`
+	PostUp              []string `json:"postUp"`
+	PostDown            []string `json:"postDown"`
+	PublicEndpoint      string   `json:"publicEndpoint"`
 
 	// Peers from this server will inheret this value
 	PeerExpireAction PeerExpireActionType `json:"peerExpireAction"`

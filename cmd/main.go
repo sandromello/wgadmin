@@ -62,6 +62,7 @@ func main() {
 		cli.InitServer(),
 		cli.ListServer(),
 		cli.DeleteServer(),
+		cli.NewCipherKey(),
 	)
 	configure.AddCommand(
 		cli.ConfigureSystemdServerCmd(),
