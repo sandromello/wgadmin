@@ -41,7 +41,6 @@ func NewAESCipherKey(base64Key string) (*CipherKey, error) {
 	var cipherKey [sha256.Size]byte
 	if base64Key == "" {
 		randomSafeKey, err := GenerateRandomString(32)
-		// fmt.Println("RANDOMSTR:", base64.StdEncoding.EncodeToString([]byte(randomSafeKey)))
 		if err != nil {
 			return nil, err
 		}
@@ -58,7 +57,6 @@ func NewAESCipherKey(base64Key string) (*CipherKey, error) {
 	ck := &CipherKey{
 		Key: []byte(cipherKey[:]),
 	}
-	fmt.Println("CIPHERENCODED:", ck.String())
 	return ck, nil
 }
 
