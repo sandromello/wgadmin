@@ -11,11 +11,65 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"time"
 )
 
+type IPMap struct {
+	values map[string]bool
+	Net    *net.IPNet
+}
+
 type CipherKey struct {
 	Key []byte
+}
+
+func incrementIP(ip net.IP) {
+	for j := len(ip) - 1; j >= 0; j-- {
+		ip[j]++
+		if ip[j] > 0 {
+			break
+		}
+	}
+}
+
+func (m *IPMap) IsAvailable(ip net.IP) bool {
+	_, ok := m.values[ip.String()]
+	return ok
+}
+
+func (m *IPMap) Del(ip net.IP) {
+	_, ok := m.values[ip.String()]
+	if ok {
+		delete(m.values, ip.String())
+	}
+}
+
+func (m *IPMap) Pop() *net.IPNet {
+	for ipaddr, _ := range m.values {
+		delete(m.values, ipaddr)
+		_, ipnet, _ := net.ParseCIDR(fmt.Sprintf("%s/32", ipaddr))
+		return ipnet
+	}
+	return nil
+}
+
+// TODO: remove broadcast ip from map
+func NewIPMap(address string) (*IPMap, error) {
+	ipmap := &IPMap{values: make(map[string]bool)}
+	// ipmap := make(IPMap)
+	ipaddr, ipnet, err := net.ParseCIDR(address)
+	if err != nil {
+		return nil, err
+	}
+	ipmap.Net = ipnet
+	for ip := ipaddr.Mask(ipnet.Mask); ipnet.Contains(ip); incrementIP(ip) {
+		if ip.Equal(ipaddr) || ip[3] == 0 {
+			continue
+		}
+		ipmap.values[ip.String()] = true
+	}
+	return ipmap, nil
 }
 
 func pad(src []byte) []byte {
@@ -31,7 +85,6 @@ func unpad(src []byte) ([]byte, error) {
 	if unpadding > length {
 		return nil, errors.New("unpad error. This could happen when incorrect encryption key is used")
 	}
-
 	return src[:(length - unpadding)], nil
 }
 

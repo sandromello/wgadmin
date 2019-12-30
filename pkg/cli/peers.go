@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -15,8 +16,6 @@ import (
 	"github.com/sandromello/wgadmin/pkg/util"
 	"github.com/spf13/cobra"
 )
-
-// TODO: add function to generate a random ip address from the wireguard server network
 
 // PeerAddCmd add a new peer
 func PeerAddCmd() *cobra.Command {
@@ -46,17 +45,44 @@ func PeerAddCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("failed generating random string: %v", err)
 				}
-				// TODO: check if this IP already exist for a peer in a given VPN
-				allowedIPs := api.ParseCIDR(O.Peer.Address)
-				if allowedIPs == nil {
-					return fmt.Errorf("failed parsing ip address: %v", O.Peer.Address)
+				var allowedIPs *net.IPNet
+				if O.Peer.Address != "" {
+					allowedIPs = api.ParseCIDR(O.Peer.Address)
+					if allowedIPs == nil {
+						return fmt.Errorf("failed parsing ip address: %v", O.Peer.Address)
+					}
 				}
+
 				wgsc, err := client.WireguardServerConfig().Get(parts[0])
 				if err != nil || wgsc == nil {
-					return fmt.Errorf("failed fetching server, err=%v", err)
+					return fmt.Errorf("failed fetching server %v, err=%v", parts[0], err)
+				}
+
+				peerList, err := client.Peer().ListByServer(wgsc.UID)
+				if err != nil {
+					return fmt.Errorf("failed listing peers. err=%v", err)
+				}
+				ipmap, err := util.NewIPMap(wgsc.Address)
+				if err != nil {
+					return fmt.Errorf("failed creating ip map. err=%v", err)
+				}
+				for _, p := range peerList {
+					ipmap.Del(p.AllowedIPs.IP)
+				}
+				if allowedIPs == nil {
+					allowedIPs = ipmap.Pop()
+					if allowedIPs == nil {
+						return fmt.Errorf("reach maximum allocation for network %v, found %v peers", ipmap.Net.String(), len(peerList))
+					}
+				} else {
+					if !ipmap.Net.Contains(allowedIPs.IP) {
+						return fmt.Errorf("ip=%s doesn't belong to network=%v", allowedIPs.IP.String(), ipmap.Net.String())
+					}
+					if !ipmap.IsAvailable(allowedIPs.IP) {
+						return fmt.Errorf("the ip=%v isn't available", allowedIPs.IP.String())
+					}
 				}
 				randomSecret := fmt.Sprintf("%s.conf", randomString)
-				// O.Peer.AutoLockDuration
 				if err := client.Peer().Update(&api.Peer{
 					Metadata: api.Metadata{
 						UID:       args[0],
