@@ -60,21 +60,25 @@ func (k *Key) UnmarshalJSON(data []byte) error {
 // PublicKeyString return the public key from a peer,
 // returns an empty string if it's empty
 func (p *Peer) PublicKeyString() string {
-	if p.PublicKey == nil {
+	if p.Spec.PublicKey == nil {
 		return ""
 	}
-	return p.PublicKey.String()
+	return p.Spec.PublicKey.String()
 }
 
+// TODO: check for bugs
 // GetStatus get the status of a peer
-func (p *Peer) GetStatus() string {
-	if p.Status == PeerStatusInitial {
-		return "initial"
+func (p *Peer) GetStatus() PeerPhase {
+	if p.Spec.Blocked {
+		return PeerBlocked
 	}
-	if p.IsExpired() && p.ExpireAction != PeerExpireActionDefault {
-		return "expired"
+	if p.Spec.PublicKey == nil {
+		return PeerPending
 	}
-	return string(p.Status)
+	if p.IsExpired() && p.Spec.ExpireAction != PeerExpireActionDefault {
+		return PeerExpired
+	}
+	return PeerActive
 }
 
 // GetServer retrieves the wireguard server which this peer belongs to
@@ -84,7 +88,7 @@ func (p *Peer) GetServer() string {
 
 // ShouldAutoLock verify if a peer should be locked
 func (p *Peer) ShouldAutoLock() bool {
-	return p.ExpireAction != PeerExpireActionDefault && p.IsExpired()
+	return p.Spec.ExpireAction != PeerExpireActionDefault && p.IsExpired()
 }
 
 // IsExpired check if the peer is expired
@@ -94,17 +98,30 @@ func (p *Peer) IsExpired() bool {
 
 // GetExpirationDuration retrieves the expiration of a given peer
 func (p *Peer) GetExpirationDuration() time.Duration {
-	if p.PublicKey == nil {
+	if p.Spec.PublicKey == nil {
 		return time.Duration(0)
 	}
 	var t time.Time
-	switch p.ExpireAction {
+	switch p.Spec.ExpireAction {
 	case PeerExpireActionBlock:
 		t, _ = time.Parse(time.RFC3339, p.UpdatedAt)
 	case PeerExpireActionReset:
 		t, _ = time.Parse(time.RFC3339, p.CreatedAt)
 	}
-	return util.RoundTime((p.ExpireDuration - time.Now().UTC().Sub(t)), time.Second)
+	return util.RoundTime((p.ParseExpireDuration() - time.Now().UTC().Sub(t)), time.Second)
+}
+
+// ParseExpireDuration parse the duration of the given expiration time
+func (p *Peer) ParseExpireDuration() time.Duration {
+	d, _ := time.ParseDuration(p.Spec.ExpireDuration)
+	return d
+}
+
+// ParseAllowedIPs parse the allowed ip's and return a net.IP.
+// It will return nil if it's in wrong format
+func (p *Peer) ParseAllowedIPs() net.IP {
+	ipaddr, _, _ := net.ParseCIDR(p.Spec.AllowedIPs)
+	return ipaddr
 }
 
 // ParseDNSToComma parses the DNS config to a comma for each entry
@@ -185,20 +202,6 @@ func GeneratePrivateKey() (Key, error) {
 	return key, nil
 }
 
-// ParseAllowedIPs will parse all CIDR and return a []net.IPNet
-// if a given CIDR is in wrong format will be ignored
-func ParseAllowedIPs(cidrs ...string) []net.IPNet {
-	var allowedIPs []net.IPNet
-	for _, cidr := range cidrs {
-		ipnet := ParseCIDR(cidr)
-		if ipnet == nil {
-			continue
-		}
-		allowedIPs = append(allowedIPs, *ipnet)
-	}
-	return allowedIPs
-}
-
 // ParseCIDR tries to parse a ipv4 or ipv6, returns nil otherwise
 func ParseCIDR(s string) *net.IPNet {
 	_, ipnet, _ := net.ParseCIDR(s)
@@ -265,3 +268,10 @@ func ParseWireguardClientConfigTemplate(obj map[string]interface{}) ([]byte, err
 	}
 	return buf.Bytes(), nil
 }
+
+// SortPeerByUID sorts peers by uid.
+type SortPeerByUID []Peer
+
+func (a SortPeerByUID) Len() int           { return len(a) }
+func (a SortPeerByUID) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a SortPeerByUID) Less(i, j int) bool { return a[i].UID < a[j].UID }

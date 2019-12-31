@@ -56,7 +56,9 @@ func main() {
 		cli.PeerAddCmd(),
 		cli.PeerListCmd(),
 		cli.PeerInfoCmd(),
-		cli.PeerSetStatusCmd(),
+		cli.PeerBlockCmd(),
+		cli.PeerUnblockCmd(),
+		cli.PeerApplyCmd(),
 	)
 	servers.AddCommand(
 		cli.InitServer(),

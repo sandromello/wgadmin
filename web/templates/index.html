@@ -69,20 +69,20 @@
             </div>
             <div class="info-box">
               <div class="info-title">Allowed IPs</div>
-              <div class="info">{{ .AllowedIPs.String }}</div>
+              <div class="info">{{ .Spec.AllowedIPs }}</div>
             </div>
+          {{ if .Spec.ExpireAction -}}
             {{ if not .IsExpired -}}
             <div class="info-box">
               <div class="info-title">Expires In</div>
               <div class="info">{{ .GetExpirationDuration.String }}</div>
             </div>
             {{- end }}
-            {{ if .ExpireAction -}}
             <div class="info-box">
               <div class="info-title">Expire Action</div>
-              <div class="info">{{ .ExpireAction }}</div>
+              <div class="info">{{ .Spec.ExpireAction }}</div>
             </div>
-            {{- end }}
+          {{- end }}
             {{ if .PublicKeyString -}}
             <div class="info-box">
               <div class="info-title">Pub Key</div>

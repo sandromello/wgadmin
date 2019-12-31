@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/ghodss/yaml"
 	"github.com/sandromello/wgadmin/pkg/store"
 	storeclient "github.com/sandromello/wgadmin/pkg/store/client"
 	"github.com/sandromello/wgadmin/pkg/webapp"
@@ -12,28 +16,21 @@ import (
 )
 
 type CmdServer struct {
-	Address              string
-	ListenPort           int
-	PublicEndpoint       string
-	PeerExpireActionType string
-	InterfaceName        string
-	Override             bool
-	CipherKey            string
+	Address        string
+	ListenPort     int
+	PublicEndpoint string
+	InterfaceName  string
+	Override       bool
+	CipherKey      string
 }
 
 type CmdPeer struct {
 	PublicAddressURL string
 	Address          string
+	ExpireAction     string
 	ExpireDuration   string
 	Override         bool
-}
-
-func (c *CmdPeer) ParseExpireDuration(defaultDuration string) time.Duration {
-	d, err := time.ParseDuration(c.ExpireDuration)
-	if err != nil {
-		d, _ = time.ParseDuration(defaultDuration)
-	}
-	return d
+	Filename         string
 }
 
 type CmdConfigure struct {
@@ -53,7 +50,7 @@ type CmdWebServer struct {
 
 type CmdOptions struct {
 	ShowVersionAndExit bool
-	JSONFormat         bool
+	Output             string
 	Local              bool
 
 	Server    CmdServer
@@ -73,6 +70,27 @@ var (
 	GlobalDBFile          = filepath.Join(GlobalWGAppConfigPath, store.DBFileName)
 	GlobalBoltOptions     = &bolt.Options{OpenFile: storeclient.FetchFromGCS}
 )
+
+// PrintOutputOptionToStdout print the object to the given format specified
+func (o *CmdOptions) PrintOutputOptionToStdout(obj interface{}) error {
+	switch o.Output {
+	case "json":
+		jsonList, err := json.Marshal(obj)
+		if err != nil {
+			return fmt.Errorf("Error: failed to serialize to json format: %v", err)
+		}
+		fmt.Println(string(jsonList))
+	case "yaml":
+		yamlList, err := yaml.Marshal(obj)
+		if err != nil {
+			return fmt.Errorf("Error: failed to serialize to yaml format: %v", err)
+		}
+		fmt.Print(string(yamlList))
+	default:
+		return errors.New("wrong output option specified")
+	}
+	return nil
+}
 
 // InitEmptyBoltOptions initialize an empty bolt.Options
 func InitEmptyBoltOptions() *bolt.Options {

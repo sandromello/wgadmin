@@ -299,7 +299,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			h.httpError(w, "Peer doesn't match with email", http.StatusUnauthorized)
 			return
 		}
-		if peer.Status == api.PeerStatusBlocked {
+		if peer.GetStatus() == api.PeerBlocked {
 			msg := fmt.Sprintf("Peer %s is blocked!", peer.UID)
 			h.httpError(w, msg, http.StatusForbidden)
 			return
@@ -311,10 +311,11 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		peer.PublicKey = nil
-		peer.Status = api.PeerStatusInitial
+		peer.Spec.PublicKey = nil
 		peer.CreatedAt = time.Now().UTC().Format(time.RFC3339)
-		peer.SecretValue = fmt.Sprintf("%s.conf", randomString)
+		peer.Status = api.PeerStatus{
+			SecretValue: fmt.Sprintf("%s.conf", randomString),
+		}
 		if err := client.Peer().Update(peer); err != nil {
 			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -323,7 +324,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			h.httpError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		redirectURL := fmt.Sprintf("/peers/%s?vpn=%s", peer.SecretValue, peer.GetServer())
+		redirectURL := fmt.Sprintf("/peers/%s?vpn=%s", peer.Status.SecretValue, peer.GetServer())
 		http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 	case "GET":
 		peerList, err := client.Peer().List()
@@ -342,7 +343,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			if len(parts) != 2 || u.Email != parts[1] {
 				continue
 			}
-			if p.SecretValue != "" && p.SecretValue == secretParts[1] {
+			if p.Status.SecretValue != "" && p.Status.SecretValue == secretParts[1] {
 				peer = &p
 				break
 			}
@@ -351,7 +352,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			h.httpError(w, "Error: peer not found for this token.", http.StatusNotFound)
 			return
 		}
-		if peer.Status == api.PeerStatusBlocked {
+		if peer.GetStatus() == api.PeerBlocked {
 			h.httpError(w, "Error: peer blocked, contact the administrator!", http.StatusBadRequest)
 			return
 		}
@@ -388,7 +389,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		data, err := api.ParseWireguardClientConfigTemplate(map[string]interface{}{
 			"PrivateKey": clientPrivkey,
 			"PublicKey":  wgsc.PublicKey.String(),
-			"Address":    peer.AllowedIPs.String(),
+			"Address":    peer.Spec.AllowedIPs,
 			"DNS":        "1.1.1.1, 8.8.8.8",
 			"Endpoint":   wgsc.PublicEndpoint,
 			"AllowedIPs": "0.0.0.0/0, ::/0",
@@ -398,11 +399,12 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pubkey := clientPrivkey.PublicKey()
-		peer.PublicKey = &pubkey
-		peer.Status = api.PeerStatusActive
-		// it's important to let the client to download the
-		// configuration only once for security concerns.
-		peer.SecretValue = ""
+		peer.Spec.PublicKey = &pubkey
+		peer.Status = api.PeerStatus{
+			// it's important to let the client to download the
+			// configuration only once for security concerns.
+			SecretValue: "",
+		}
 		if err := client.Peer().Update(peer); err != nil {
 			msg := fmt.Sprintf("Error: failed updating peer: %v", err)
 			h.httpError(w, msg, http.StatusInternalServerError)

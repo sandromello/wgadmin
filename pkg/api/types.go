@@ -2,7 +2,6 @@ package api
 
 import (
 	"net"
-	"time"
 )
 
 // KeyLen is the expected key length for a WireGuard key.
@@ -21,19 +20,22 @@ type Metadata struct {
 	UpdatedAt string `json:"updatedAt"`
 }
 
-// PeerStatus indicates the status of a given peer
-type PeerStatus string
+// PeerPhase indicates in which state a peer is
+type PeerPhase string
 
 const (
-	// PeerStatusInitial indicates that the peer is registered and a configuration
-	// is available for download.
-	PeerStatusInitial PeerStatus = ""
-	// PeerStatusActive indicates that peer is configured on the wireguard server
+	// PeerPending indicates that the peer is registered
+	// and awaiting for download.
+	PeerPending PeerPhase = "pending"
+	// PeerBlocked indicates that the peer is unable to download
+	// a configuration or establish connection with the server.
+	PeerBlocked PeerPhase = "blocked"
+	// PeerActive indicates that peer is configured on the wireguard server
 	// and could be used to establish a connection with it.
-	PeerStatusActive PeerStatus = "active"
-	// PeerStatusBlocked indicates that the peer is unable to download configuration
-	// or establish connection with the server.
-	PeerStatusBlocked PeerStatus = "blocked"
+	PeerActive PeerPhase = "active"
+	// PeerExpired indicates that the peer is configured to expire and
+	// its lifespan has expired
+	PeerExpired PeerPhase = "expired"
 )
 
 // PeerExpireActionType indicate what to do when the peer is expired
@@ -70,21 +72,29 @@ type WireguardServerConfig struct {
 
 	// Only peers with status active
 	ActivePeers []Peer `json:"peers"` // TODO: deprecate in flavor of peer selector
-	// Select peers matching labels of a giving peer object
-	// PeerSelector map[string]string `json:"selector"`
 }
 
 // Peer is a section of peer in a wg server config file
 type Peer struct {
-	Metadata `json:",inline"`
+	Metadata `json:"metadata"`
 
-	PublicKey      *Key                 `json:"publicKey"`
-	AllowedIPs     net.IPNet            `json:"allowedIPs"`
-	SecretValue    string               `json:"secretValue"`
-	ExpireAction   PeerExpireActionType `json:"peerExpireAction"`
-	ExpireDuration time.Duration        `json:"expireDuration"`
-
+	Spec   PeerSpec   `json:"spec"`
 	Status PeerStatus `json:"status"`
+}
+
+// PeerSpec main configuration of a peer
+type PeerSpec struct {
+	PublicKey      *Key                 `json:"publicKey"`
+	AllowedIPs     string               `json:"allowedIPs"`
+	ExpireAction   PeerExpireActionType `json:"expireAction"`
+	ExpireDuration string               `json:"expireDuration"`
+	Blocked        bool                 `json:"blocked"`
+}
+
+// PeerStatus hold status of a peer
+type PeerStatus struct {
+	Phase       PeerPhase `json:"phase"`
+	SecretValue string    `json:"secretValue"`
 }
 
 // WireguardClientConfig represents a wireguard client config
@@ -112,11 +122,3 @@ type PeerClientConfig struct {
 	Endpoint            string      `json:"endpoint"`
 	PersistentKeepAlive int         `json:"persistentKeepAlive"`
 }
-
-// // PGPPublicKey represents a PGP Public Key used to encrypt the wireguard client config
-// type PGPPublicKey struct {
-// 	UID string `json:"uid"`
-
-// 	Name string `json:"name"`
-// 	Key  string `json:"key"`
-// }

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -31,13 +30,8 @@ func ListServer() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if O.JSONFormat {
-				jsonList, err := json.Marshal(wgscList)
-				if err != nil {
-					return fmt.Errorf("Error: failed to serialize to json format: %v", err)
-				}
-				fmt.Println(string(jsonList))
-				return nil
+			if O.Output != "" {
+				return O.PrintOutputOptionToStdout(wgscList)
 			}
 			w := new(tabwriter.Writer)
 			w.Init(os.Stdout, 0, 8, 2, '\t', tabwriter.AlignRight)
@@ -46,16 +40,16 @@ func ListServer() *cobra.Command {
 				fmt.Println("No resources found.")
 				return nil
 			}
-			fmt.Fprintln(w, "UID\tADDRESS\tPORT\tPUBKEY\tEXPIREACTION\tPEERS\t")
+			fmt.Fprintln(w, "UID\tADDRESS\tPORT\tPUBKEY\t")
 			for _, wg := range wgscList {
 				pubkey := wg.PublicKey.String()
-				fmt.Fprintf(w, "%s\t%s\t%v\t%s\t%v\t%v\t", wg.UID, wg.Address, wg.ListenPort, pubkey, wg.PeerExpireAction, len(wg.ActivePeers))
+				fmt.Fprintf(w, "%s\t%s\t%v\t%s\t", wg.UID, wg.Address, wg.ListenPort, pubkey)
 				fmt.Fprintln(w)
 			}
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&O.JSONFormat, "json", false, "Print the output in json format.")
+	cmd.Flags().StringVarP(&O.Output, "output", "o", "", "Output format. One of: json|yaml.")
 	return cmd
 }
 
@@ -165,22 +159,14 @@ func InitServer() *cobra.Command {
 				return fmt.Errorf("failed encrypting private key: %v", err)
 			}
 			pubKey := privKey.PublicKey()
-			expireAction := O.Server.PeerExpireActionType
-			switch api.PeerExpireActionType(expireAction) {
-			case api.PeerExpireActionBlock, api.PeerExpireActionReset:
-			default:
-				expireAction = ""
-			}
 			if err := client.WireguardServerConfig().Update(&api.WireguardServerConfig{
 				Metadata: api.Metadata{
 					UID:       wgenv,
 					CreatedAt: time.Now().UTC().Format(time.RFC3339),
 				},
-				Address:          O.Server.Address,
-				PublicEndpoint:   O.Server.PublicEndpoint,
-				PeerExpireAction: api.PeerExpireActionType(expireAction),
-				ListenPort:       O.Server.ListenPort,
-				// PrivateKey:       &privKey,
+				Address:             O.Server.Address,
+				PublicEndpoint:      O.Server.PublicEndpoint,
+				ListenPort:          O.Server.ListenPort,
 				EncryptedPrivateKey: encPrivKey,
 				PublicKey:           &pubKey,
 				PostUp: []string{
@@ -217,7 +203,6 @@ func InitServer() *cobra.Command {
 	cmd.Flags().StringVar(&O.Server.InterfaceName, "iface", "eth0", "The name of the interface which will be used to run scripts.")
 	cmd.Flags().StringVar(&O.Server.Address, "address", "192.168.180.1/22", "The address of wireguard server config.")
 	cmd.Flags().StringVar(&O.Server.PublicEndpoint, "endpoint", "", "The public [DNS|IP]:PORT for the wireguard server instance.")
-	cmd.Flags().StringVar(&O.Server.PeerExpireActionType, "expire-action", "", "The action when the peer is expired: reset or block, default to not expire.")
 	cmd.Flags().StringVar(&O.Server.CipherKey, "cipher-key", os.Getenv("CIPHER_KEY"), "A base64 encoded key used to encrypt the private key, could be set using CIPHER_KEY environment variable.")
 	cmd.Flags().BoolVar(&O.Server.Override, "override", false, "Override the current configuration.")
 	cmd.Flags().IntVar(&O.Server.ListenPort, "listen-port", 51820, "The listen port for the wireguard server.")

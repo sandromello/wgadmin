@@ -51,7 +51,7 @@ func (c *peer) SearchByPubKey(server, pubKey string) (*api.Peer, error) {
 		return nil, err
 	}
 	for _, peer := range peerList {
-		if peer.Status != api.PeerStatusActive {
+		if peer.GetStatus() != api.PeerActive {
 			continue
 		}
 		if peer.PublicKeyString() == pubKey {

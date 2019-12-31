@@ -38,10 +38,10 @@ func (m *IPMap) IsAvailable(ip net.IP) bool {
 	return ok
 }
 
-func (m *IPMap) Del(ip net.IP) {
-	_, ok := m.values[ip.String()]
+func (m *IPMap) Del(ipaddr string) {
+	_, ok := m.values[ipaddr]
 	if ok {
-		delete(m.values, ip.String())
+		delete(m.values, ipaddr)
 	}
 }
 
