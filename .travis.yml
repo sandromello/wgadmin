@@ -8,6 +8,9 @@ notifications:
 go:
   - 1.12
 
+env:
+  - GO111MODULE=on
+
 script:
   - make test
 
