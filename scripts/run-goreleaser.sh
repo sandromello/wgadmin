@@ -7,7 +7,7 @@ if [ -f "/usr/local/bin/goreleaser" ]; then
 fi
 
 VERSION=v0.123.3
-CHECKSUM=efaafbb3ced464274bc3574edcf31be1d4c69f7a5932fa9b741275add2d35ab8
+CHECKSUM=cad997014e5c6a462488757087db4145c2ae7d7d73a29cb62bbfd41f18ccea30
 TAR_FILE="/tmp/goreleaser_$(uname -s)_$(uname -m).tar.gz"
 RELEASES_URL="https://github.com/goreleaser/goreleaser/releases"
 
