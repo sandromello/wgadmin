@@ -58,7 +58,7 @@ func PeerApplyCmd() *cobra.Command {
 				}
 				if old == nil {
 					if err := validatePeer(&new); err != nil {
-						return err
+						return fmt.Errorf("failed validating peer %s, err=%v", new.UID, err)
 					}
 					ipaddr := new.ParseAllowedIPs()
 					if !ipmap.IsAvailable(ipaddr) {
@@ -105,7 +105,10 @@ func validatePeer(p *api.Peer) error {
 	default:
 		return errors.New("not a valid expireAction option")
 	}
-	_, err := time.ParseDuration(p.Spec.ExpireDuration)
+	var err error
+	if p.Spec.ExpireDuration != "" {
+		_, err = time.ParseDuration(p.Spec.ExpireDuration)
+	}
 	return err
 }
 
@@ -148,9 +151,9 @@ func PeerAddCmd() *cobra.Command {
 			parts := strings.Split(args[0], "/")
 			p, err := client.Peer().Get(args[0])
 			if err == nil && (p == nil || O.Peer.Override) {
-				randomString, err := util.GenerateRandomString(50)
+				persistentPubKey, err := O.ParsePersistentPublicKey()
 				if err != nil {
-					return fmt.Errorf("failed generating random string: %v", err)
+					return fmt.Errorf("failed parsing persistent public key: %v", err)
 				}
 				var allowedIPs *net.IPNet
 				if O.Peer.Address != "" {
@@ -181,27 +184,45 @@ func PeerAddCmd() *cobra.Command {
 						return fmt.Errorf("the ip=%v isn't available", allowedIPs.IP.String())
 					}
 				}
-				randomSecret := fmt.Sprintf("%s.conf", randomString)
+				var wireguardClientConfig []byte
+				if O.Peer.ClientConfig {
+					clientPrivkey, err := api.GeneratePrivateKey()
+					if err != nil {
+						return fmt.Errorf("failed generating private key for client config, err=%v", err)
+					}
+					pubkey := clientPrivkey.PublicKey()
+					persistentPubKey = &pubkey
+					wireguardClientConfig, err = api.ParseWireguardClientConfigTemplate(map[string]interface{}{
+						"PrivateKey": clientPrivkey,
+						"PublicKey":  wgsc.PublicKey.String(),
+						"Address":    allowedIPs.String(),
+						"DNS":        "1.1.1.1, 8.8.8.8",
+						"Endpoint":   wgsc.PublicEndpoint,
+						"AllowedIPs": "0.0.0.0/0, ::/0",
+					})
+					if err != nil {
+						return fmt.Errorf("failed generating client config, err=%v", err)
+					}
+				}
 				if err := client.Peer().Update(&api.Peer{
 					Metadata: api.Metadata{
 						UID:       args[0],
 						CreatedAt: time.Now().UTC().Format(time.RFC3339),
 					},
 					Spec: api.PeerSpec{
-						PublicKey: nil, // will be set when downloading the config
+						PersistentPublicKey: persistentPubKey,
 						// TODO: validate expire action first
-						ExpireAction:   api.PeerExpireActionType(O.Peer.ExpireAction),
+						ExpireAction: api.PeerExpireActionType(O.Peer.ExpireAction),
+						// TODO: parse expire duration
 						ExpireDuration: "24h",
 						AllowedIPs:     allowedIPs.String(),
-					},
-					Status: api.PeerStatus{
-						SecretValue: randomSecret,
 					},
 				}); err != nil {
 					return err
 				}
-				wgenv := strings.Split(args[0], "/")[0]
-				fmt.Printf("%s/peers/%s?vpn=%s\n", O.Peer.PublicAddressURL, randomSecret, wgenv)
+				if wireguardClientConfig != nil {
+					fmt.Print(string(wireguardClientConfig))
+				}
 			} else if err != nil {
 				// failed veryfing if peer exists
 				return fmt.Errorf("failed fetching peer: %v", err)
@@ -211,10 +232,11 @@ func PeerAddCmd() *cobra.Command {
 			return client.SyncRemote()
 		},
 	}
-	cmd.Flags().StringVar(&O.Peer.PublicAddressURL, "public-address", "http://127.0.0.1", "The public address that will be used to download the wireguard client config.")
 	cmd.Flags().StringVar(&O.Peer.Address, "address", "", "The address of the peer, must not overlap with other peers.")
 	cmd.Flags().StringVar(&O.Peer.ExpireAction, "expire-action", string(api.PeerExpireActionDefault), "The action to perform when expiring peers: block|reset.")
 	cmd.Flags().StringVar(&O.Peer.ExpireDuration, "expire-in", "24h", "The duration for auto expiring or locking the peer.")
+	cmd.Flags().StringVar(&O.Peer.PersistentPublicKey, "public-key", "", "The public key to add to the peer, this key will never expire.")
+	cmd.Flags().BoolVar(&O.Peer.ClientConfig, "client-config", false, "Generate a wireguard client config, this public key will never expire.")
 	cmd.Flags().BoolVar(&O.Peer.Override, "override", false, "Override the configured peer, it will reset the current configuration.")
 	return cmd
 }
@@ -246,14 +268,25 @@ func PeerInfoCmd() *cobra.Command {
 				return O.PrintOutputOptionToStdout(peer)
 			}
 			pubkey := "-"
-			if peer.Spec.PublicKey != nil {
-				pubkey = peer.Spec.PublicKey.String()
+			if peer.GetPublicKey() != nil {
+				pubkey = peer.GetPublicKey().String()
+			}
+			expireAction := "-"
+			if peer.Spec.ExpireAction != "" {
+				expireAction = string(peer.Spec.ExpireAction)
+			}
+			expireDuration := "-"
+			if peer.Spec.ExpireDuration != "" {
+				expireDuration = peer.Spec.ExpireDuration
 			}
 			fmt.Println("UID:", peer.UID)
 			fmt.Println("CREATEDAT:", peer.CreatedAt)
 			fmt.Println("UPDATEDAT:", peer.UpdatedAt)
 			fmt.Println("PUBKEY:", pubkey)
 			fmt.Println("SECRET:", peer.Status.SecretValue)
+			fmt.Println("BLOCKED:", peer.Spec.Blocked)
+			fmt.Println("EXPIREACTION:", expireAction)
+			fmt.Println("EXPIREDURATION:", expireDuration)
 			fmt.Println("ALLOWEDIPS:", peer.Spec.AllowedIPs)
 			fmt.Println("AUTOLOCK:", peer.ShouldAutoLock())
 			fmt.Println("STATUS:", peer.GetStatus())
@@ -370,11 +403,15 @@ func PeerListCmd() *cobra.Command {
 			fmt.Fprintln(w, "UID\tALLOWEDIP\tSECRET\tPUBKEY\tSTATUS\tEXPIRE IN\tUPDATED AT\t")
 			for _, p := range peerList {
 				var pubkey string
-				if p.Spec.PublicKey != nil {
-					pubkey = p.Spec.PublicKey.String()
+				if p.Spec.PersistentPublicKey != nil {
+					p.UID = fmt.Sprintf("%s*", p.UID) // Indicates that is a persistent pub key
+				}
+				if p.GetPublicKey() != nil {
+					pubkey = p.GetPublicKey().String()
 					prefixPubKey := pubkey[0:6]
 					suffixPubKey := pubkey[len(pubkey)-6 : len(pubkey)]
 					pubkey = fmt.Sprintf("%s...%s", prefixPubKey, suffixPubKey)
+
 				}
 				var secret string
 				if len(p.Status.SecretValue) > 0 {
@@ -385,10 +422,10 @@ func PeerListCmd() *cobra.Command {
 				ipaddr := p.Spec.AllowedIPs
 				var expin string
 				switch d := p.GetExpirationDuration(); {
-				case d <= 0 || p.Spec.PublicKey == nil:
-					expin = "-"
-				case p.Spec.ExpireAction == api.PeerExpireActionDefault:
+				case p.Spec.ExpireAction == api.PeerExpireActionDefault || p.Spec.PersistentPublicKey != nil:
 					expin = "never"
+				case d <= 0 || p.GetPublicKey() == nil:
+					expin = "-"
 				case d.Hours() > 24:
 					expin = fmt.Sprintf("%.fd", math.Floor(d.Hours()/24))
 				default:

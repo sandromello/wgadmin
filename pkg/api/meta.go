@@ -60,22 +60,32 @@ func (k *Key) UnmarshalJSON(data []byte) error {
 // PublicKeyString return the public key from a peer,
 // returns an empty string if it's empty
 func (p *Peer) PublicKeyString() string {
-	if p.Spec.PublicKey == nil {
+	pubkey := p.GetPublicKey()
+	if pubkey == nil {
 		return ""
 	}
-	return p.Spec.PublicKey.String()
+	return pubkey.String()
 }
 
-// TODO: check for bugs
+// GetPublicKey returns a persistent public key, otherwise returns a volatile one
+func (p *Peer) GetPublicKey() *Key {
+	if p.Spec.PersistentPublicKey != nil {
+		return p.Spec.PersistentPublicKey
+	}
+	return p.Status.PublicKey
+}
+
 // GetStatus get the status of a peer
 func (p *Peer) GetStatus() PeerPhase {
 	if p.Spec.Blocked {
 		return PeerBlocked
 	}
-	if p.Spec.PublicKey == nil {
+	if p.GetPublicKey() == nil {
 		return PeerPending
 	}
-	if p.IsExpired() && p.Spec.ExpireAction != PeerExpireActionDefault {
+	if p.Spec.ExpireAction != PeerExpireActionDefault &&
+		p.Spec.PersistentPublicKey == nil &&
+		p.IsExpired() {
 		return PeerExpired
 	}
 	return PeerActive
@@ -98,7 +108,7 @@ func (p *Peer) IsExpired() bool {
 
 // GetExpirationDuration retrieves the expiration of a given peer
 func (p *Peer) GetExpirationDuration() time.Duration {
-	if p.Spec.PublicKey == nil {
+	if p.GetPublicKey() == nil {
 		return time.Duration(0)
 	}
 	var t time.Time
@@ -238,12 +248,15 @@ func (w *WireguardServerConfig) ParseWireguardServerConfigTemplate(cipherKey str
 	if err != nil {
 		return nil, err
 	}
-	w.PrivateKey = &privKey
-	if err := HandleTemplates(string(templateWireguardServerConfig), &buf, w); err != nil {
-		w.PrivateKey = nil
+	if err := HandleTemplates(string(templateWireguardServerConfig), &buf, map[string]interface{}{
+		"PrivateKey": privKey.String(),
+		"Address":    w.Address,
+		"ListenPort": w.ListenPort,
+		"PostUp":     w.PostUp,
+		"PostDown":   w.PostDown,
+	}); err != nil {
 		return nil, fmt.Errorf("failed parsing template: %v", err)
 	}
-	w.PrivateKey = nil
 	return buf.Bytes(), nil
 }
 

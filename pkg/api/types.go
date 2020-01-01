@@ -61,7 +61,6 @@ type WireguardServerConfig struct {
 	Address             string   `json:"address"`
 	ListenPort          int      `json:"listenPort"`
 	EncryptedPrivateKey string   `json:"encryptedPrivateKey"`
-	PrivateKey          *Key     `json:"privateKey"` // TODO: remove in flavor of EncryptedPrivateKey
 	PublicKey           *Key     `json:"publicKey"`
 	PostUp              []string `json:"postUp"`
 	PostDown            []string `json:"postDown"`
@@ -69,9 +68,6 @@ type WireguardServerConfig struct {
 
 	// Peers from this server will inheret this value
 	PeerExpireAction PeerExpireActionType `json:"peerExpireAction"`
-
-	// Only peers with status active
-	ActivePeers []Peer `json:"peers"` // TODO: deprecate in flavor of peer selector
 }
 
 // Peer is a section of peer in a wg server config file
@@ -84,17 +80,17 @@ type Peer struct {
 
 // PeerSpec main configuration of a peer
 type PeerSpec struct {
-	PublicKey      *Key                 `json:"publicKey"`
-	AllowedIPs     string               `json:"allowedIPs"`
-	ExpireAction   PeerExpireActionType `json:"expireAction"`
-	ExpireDuration string               `json:"expireDuration"`
-	Blocked        bool                 `json:"blocked"`
+	PersistentPublicKey *Key                 `json:"persistentPublicKey"`
+	AllowedIPs          string               `json:"allowedIPs"`
+	ExpireAction        PeerExpireActionType `json:"expireAction"`
+	ExpireDuration      string               `json:"expireDuration"`
+	Blocked             bool                 `json:"blocked"`
 }
 
 // PeerStatus hold status of a peer
 type PeerStatus struct {
-	Phase       PeerPhase `json:"phase"`
-	SecretValue string    `json:"secretValue"`
+	SecretValue string `json:"secretValue"`
+	PublicKey   *Key   `json:"publicKey"`
 }
 
 // WireguardClientConfig represents a wireguard client config

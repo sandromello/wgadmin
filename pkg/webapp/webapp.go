@@ -304,6 +304,11 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			h.httpError(w, msg, http.StatusForbidden)
 			return
 		}
+		if peer.Spec.PersistentPublicKey != nil {
+			msg := fmt.Sprintf("Peer %s has a persistent public key which couldn't be renewed!", peer.UID)
+			h.httpError(w, msg, http.StatusForbidden)
+			return
+		}
 		// Reset Peer
 		randomString, err := util.GenerateRandomString(50)
 		if err != nil {
@@ -311,10 +316,10 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		peer.Spec.PublicKey = nil
 		peer.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 		peer.Status = api.PeerStatus{
 			SecretValue: fmt.Sprintf("%s.conf", randomString),
+			PublicKey:   nil,
 		}
 		if err := client.Peer().Update(peer); err != nil {
 			h.httpError(w, err.Error(), http.StatusInternalServerError)
@@ -399,11 +404,11 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pubkey := clientPrivkey.PublicKey()
-		peer.Spec.PublicKey = &pubkey
 		peer.Status = api.PeerStatus{
 			// it's important to let the client to download the
 			// configuration only once for security concerns.
 			SecretValue: "",
+			PublicKey:   &pubkey,
 		}
 		if err := client.Peer().Update(peer); err != nil {
 			msg := fmt.Sprintf("Error: failed updating peer: %v", err)

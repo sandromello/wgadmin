@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ghodss/yaml"
+	"github.com/sandromello/wgadmin/pkg/api"
 	"github.com/sandromello/wgadmin/pkg/store"
 	storeclient "github.com/sandromello/wgadmin/pkg/store/client"
 	"github.com/sandromello/wgadmin/pkg/webapp"
@@ -25,12 +26,13 @@ type CmdServer struct {
 }
 
 type CmdPeer struct {
-	PublicAddressURL string
-	Address          string
-	ExpireAction     string
-	ExpireDuration   string
-	Override         bool
-	Filename         string
+	Address             string
+	ExpireAction        string
+	ExpireDuration      string
+	PersistentPublicKey string
+	ClientConfig        bool
+	Override            bool
+	Filename            string
 }
 
 type CmdConfigure struct {
@@ -70,6 +72,15 @@ var (
 	GlobalDBFile          = filepath.Join(GlobalWGAppConfigPath, store.DBFileName)
 	GlobalBoltOptions     = &bolt.Options{OpenFile: storeclient.FetchFromGCS}
 )
+
+// ParsePersistentPublicKey parse a base64 string pubkey to an api.Key
+func (o *CmdOptions) ParsePersistentPublicKey() (*api.Key, error) {
+	if o.Peer.PersistentPublicKey == "" {
+		return nil, nil
+	}
+	k, err := api.ParseKey(o.Peer.PersistentPublicKey)
+	return &k, err
+}
 
 // PrintOutputOptionToStdout print the object to the given format specified
 func (o *CmdOptions) PrintOutputOptionToStdout(obj interface{}) error {
