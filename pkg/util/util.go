@@ -89,7 +89,7 @@ func unpad(src []byte) ([]byte, error) {
 }
 
 // NewAESCipherKey will generate a random safe string if the key is empty,
-// otherwise it will as the cipher key
+// otherwise it will use as the cipher key
 func NewAESCipherKey(base64Key string) (*CipherKey, error) {
 	var cipherKey [sha256.Size]byte
 	if base64Key == "" {

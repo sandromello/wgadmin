@@ -1,0 +1,20 @@
+language: go
+
+go_import_path: github.com/sandromello/wgadmin
+
+notifications:
+  email: true
+
+go:
+  - 1.12
+
+script:
+  - make test
+
+deploy:
+- provider: script
+  skip_cleanup: true
+  script: make publish
+  on:
+    tags: true
+    condition: $TRAVIS_OS_NAME = linux

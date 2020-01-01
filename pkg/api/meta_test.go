@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"fmt"
-	"net"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -61,88 +60,6 @@ PostDown = iptables -D FORWARD -i %i -j ACCEPT
 		t.Fatalf("failed handling template: %v", err)
 	}
 	if diff := cmp.Diff(string(expOutput), string(configData)); diff != "" {
-		t.Fatalf("unexpected ini output (-want +got):\n%s", diff)
-	}
-}
-
-func TestWireguardServerPeersConfigToIni(t *testing.T) {
-	expOutput := []byte(`[Peer]
-PublicKey = 8AO7DXtcu//EolOd9zevkU6Rro0DDgCbnjXm4OUWcWs=
-AllowedIPs = 192.168.180.2/32
-
-[Peer]
-PublicKey = b/p252rtUdFg7Z7ENKsjguhBYfjsplzvWKCCWGsOCgo=
-AllowedIPs = 192.168.180.3/32
-
-[Peer]
-PublicKey = T7WIUxjK4koRiKles/5dNUs5naOJtJf4Oq8m6IeVaxM=
-AllowedIPs = 192.168.180.4/32
-
-`)
-	// wg genkey | wg pubkey
-	pubkey01, _ := ParseKey("8AO7DXtcu//EolOd9zevkU6Rro0DDgCbnjXm4OUWcWs=")
-	pubkey02, _ := ParseKey("b/p252rtUdFg7Z7ENKsjguhBYfjsplzvWKCCWGsOCgo=")
-	pubkey03, _ := ParseKey("T7WIUxjK4koRiKles/5dNUs5naOJtJf4Oq8m6IeVaxM=")
-	w := &WireguardServerConfig{
-		ActivePeers: []Peer{
-			{
-				PublicKey:  &pubkey01,
-				AllowedIPs: *ParseCIDR("192.168.180.2/32"),
-			},
-			{
-				PublicKey:  &pubkey02,
-				AllowedIPs: *ParseCIDR("192.168.180.3/32"),
-			},
-			{
-				PublicKey:  &pubkey03,
-				AllowedIPs: *ParseCIDR("192.168.180.4/32"),
-			},
-		},
-	}
-	var buf bytes.Buffer
-	if err := HandleTemplates(string(templateWireguardServerPeersConfig), &buf, w); err != nil {
-		t.Fatalf("failed handling template: %v", err)
-	}
-	if diff := cmp.Diff(string(expOutput), buf.String()); diff != "" {
-		t.Fatalf("unexpected ini output (-want +got):\n%s", diff)
-	}
-}
-
-func TestWireguardClientConfigToIni(t *testing.T) {
-	expOutput := []byte(`[Interface]
-PrivateKey = +P5vXpg6yPdq5mG1KNmSamFPKvzbBEJ6OqYYidwKREo=
-Address    = 192.168.180.2/32
-DNS        = 1.1.1.1, 8.8.8.8
-
-[Peer]
-PublicKey  = Xn9vjTRVlfm2nxVTMATZy73EJWRYWv7db2z13o2e5R4=
-AllowedIPs = 0.0.0.0/0, ::/0
-Endpoint   = wg-dev.vpn.domain.tld:51820
-
-PersistentKeepalive = 25
-`)
-	// wg genkey
-	privkey, _ := ParseKey("+P5vXpg6yPdq5mG1KNmSamFPKvzbBEJ6OqYYidwKREo=")
-	w := &WireguardClientConfig{
-		UID: "foo",
-		InterfaceClientConfig: InterfaceClientConfig{
-			PrivateKey: &privkey,
-			Address:    ParseCIDR("192.168.180.2/32"),
-			DNS:        []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")},
-		},
-		PeerClientConfig: PeerClientConfig{
-			PublicKey:           privkey.PublicKey().String(),
-			AllowedIPs:          ParseAllowedIPs("0.0.0.0/0", "::/0"),
-			Endpoint:            "wg-dev.vpn.domain.tld:51820",
-			PersistentKeepAlive: 25,
-		},
-	}
-
-	var buf bytes.Buffer
-	if err := HandleTemplates(string(templateWireguardClientConfig), &buf, w); err != nil {
-		t.Fatalf("failed handling template: %v", err)
-	}
-	if diff := cmp.Diff(string(expOutput), buf.String()); diff != "" {
 		t.Fatalf("unexpected ini output (-want +got):\n%s", diff)
 	}
 }

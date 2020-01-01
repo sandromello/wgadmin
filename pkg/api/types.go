@@ -102,9 +102,6 @@ type WireguardServerConfig struct {
 	PostUp              []string `json:"postUp"`
 	PostDown            []string `json:"postDown"`
 	PublicEndpoint      string   `json:"publicEndpoint"`
-
-	// Peers from this server will inheret this value
-	PeerExpireAction PeerExpireActionType `json:"peerExpireAction"`
 }
 
 // Peer is a section of peer in a wg server config file

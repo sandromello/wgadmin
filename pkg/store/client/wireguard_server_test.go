@@ -2,50 +2,67 @@ package client
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"os"
 	"testing"
-
-	// https://github.com/golang/go/issues/12153#issuecomment-229998750
-	_ "golang.org/x/crypto/ripemd160"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sandromello/wgadmin/pkg/api"
 	bolt "go.etcd.io/bbolt"
 )
 
+func openTempFile(path string, flag int, mode os.FileMode) (*os.File, error) {
+	f, err := ioutil.TempFile("", "vpnapp-")
+	if err != nil {
+		return nil, err
+	}
+	return f, os.Remove(f.Name())
+}
+
+func encode(obj interface{}) []byte {
+	encoded, _ := json.Marshal(obj)
+	return encoded
+}
+
 func TestWireguardServerListAndDelete(t *testing.T) {
 	c := NewOrDie("", "", &bolt.Options{OpenFile: openTempFile})
 	privkey01, _ := api.GeneratePrivateKey()
 	privkey02, _ := api.GeneratePrivateKey()
 	privkey03, _ := api.GeneratePrivateKey()
+	// cipherKey, _ := util.NewAESCipherKey("")
+
 	var expectedJSONList []string
 	for _, w := range []api.WireguardServerConfig{
 		{
-			UID:        "dev",
-			Address:    api.ParseCIDR("10.100.0.10/32"),
-			ListenPort: 51820,
-			PrivateKey: &privkey01,
-			PostUp:     []string{"ip link set mtu 1500 dev ens4"},
-			PostDown:   []string{"sysctl -w net.ipv4.ip_forward=0"},
+			Metadata:            api.Metadata{UID: "dev"},
+			Address:             "10.100.0.10/32",
+			ListenPort:          51820,
+			EncryptedPrivateKey: privkey01.String(),
+			PublicKey:           func() *api.Key { k := privkey01.PublicKey(); return &k }(),
+			PostUp:              []string{"ip link set mtu 1500 dev ens4"},
+			PostDown:            []string{"sysctl -w net.ipv4.ip_forward=0"},
 		},
 		{
-			UID:        "prod",
-			Address:    api.ParseCIDR("10.100.0.11/32"),
-			ListenPort: 51820,
-			PrivateKey: &privkey02,
-			PostUp:     []string{"ip link set mtu 1500 dev ens4"},
-			PostDown:   []string{"sysctl -w net.ipv4.ip_forward=0"},
+			Metadata:            api.Metadata{UID: "prod"},
+			Address:             "10.100.0.11/32",
+			ListenPort:          51820,
+			EncryptedPrivateKey: privkey02.String(),
+			PublicKey:           func() *api.Key { k := privkey02.PublicKey(); return &k }(),
+			PostUp:              []string{"ip link set mtu 1500 dev ens4"},
+			PostDown:            []string{"sysctl -w net.ipv4.ip_forward=0"},
 		},
 		{
-			UID:        "staging",
-			Address:    api.ParseCIDR("10.100.0.12/32"),
-			ListenPort: 51820,
-			PrivateKey: &privkey03,
-			PostUp:     []string{"ip link set mtu 1500 dev ens4"},
-			PostDown:   []string{"sysctl -w net.ipv4.ip_forward=0"},
+			Metadata:            api.Metadata{UID: "staging"},
+			Address:             "10.100.0.12/32",
+			ListenPort:          51820,
+			EncryptedPrivateKey: privkey03.String(),
+			PublicKey:           func() *api.Key { k := privkey03.PublicKey(); return &k }(),
+			PostUp:              []string{"ip link set mtu 1500 dev ens4"},
+			PostDown:            []string{"sysctl -w net.ipv4.ip_forward=0"},
 		},
 	} {
-		if err := c.WireguardServerConfig().Create(&w); err != nil {
-			t.Fatalf("failed creating wireguard server config: %v", err)
+		if err := c.WireguardServerConfig().Update(&w); err != nil {
+			t.Fatalf("failed updating wireguard server config: %v", err)
 		}
 		data, err := json.Marshal(w)
 		if err != nil {
@@ -91,10 +108,11 @@ func TestWireguardServerStoreCRUD(t *testing.T) {
 	}
 
 	wgsc := &api.WireguardServerConfig{
-		UID:        bucketName,
-		Address:    api.ParseCIDR("10.100.0.10/32"),
-		ListenPort: 51820,
-		PrivateKey: &privkey,
+		Metadata:            api.Metadata{UID: bucketName},
+		Address:             "10.100.0.10/32",
+		ListenPort:          51820,
+		EncryptedPrivateKey: privkey.String(),
+		PublicKey:           func() *api.Key { k := privkey.PublicKey(); return &k }(),
 		PostUp: []string{
 			"ip link set mtu 1500 dev ens4",
 			"ip link set mtu 1500 dev %i",
@@ -106,7 +124,7 @@ func TestWireguardServerStoreCRUD(t *testing.T) {
 			"iptables -D FORWARD -i %i -j ACCEPT",
 		},
 	}
-	if err := c.WireguardServerConfig().Create(wgsc); err != nil {
+	if err := c.WireguardServerConfig().Update(wgsc); err != nil {
 		t.Fatalf("failed creating wg server config: %v", err)
 	}
 	wgscExpected, err := c.WireguardServerConfig().Get(bucketName)
@@ -117,76 +135,3 @@ func TestWireguardServerStoreCRUD(t *testing.T) {
 		t.Fatalf("unexpected object (-want +got):\n%s", diff)
 	}
 }
-
-// func TestWireguardServerAddClient(t *testing.T) {
-// 	var (
-// 		bucketName  = "wg-dev"
-// 		resourceUID = "user@domain.tld"
-// 	)
-// 	e, err := pgputils.NewEntity("user", "a user entity", resourceUID)
-// 	if err != nil {
-// 		t.Fatalf("failed generating new entity: %v", err)
-// 	}
-
-// 	clientPrivkey, err := api.GeneratePrivateKey()
-// 	if err != nil {
-// 		t.Fatalf("failed generating client private key: %v", err)
-// 	}
-// 	wgcc := &api.WireguardClientConfig{
-// 		UID: resourceUID,
-// 		InterfaceClientConfig: api.InterfaceClientConfig{
-// 			PrivateKey: &clientPrivkey,
-// 			Address:    api.ParseCIDR("192.168.0.100/32"),
-// 			DNS:        []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")},
-// 		},
-// 		PeerClientConfig: api.PeerClientConfig{
-// 			PublicKey:           clientPrivkey.PublicKey().String(),
-// 			AllowedIPs:          api.ParseAllowedIPs("0.0.0.0/0", "::/0"),
-// 			Endpoint:            "wg-dev.vpn.domain.tld:51820",
-// 			PersistentKeepAlive: 25,
-// 		},
-// 	}
-
-// 	expTunnelConfig, err := api.ParseWireguardClientConfigTemplate(wgcc)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-
-// 	c := NewOrDie("", bucketName, &bolt.Options{OpenFile: openTempFile})
-// 	serverPrivkey, err := api.GeneratePrivateKey()
-// 	if err != nil {
-// 		t.Fatalf("failed generating server private key: %v", err)
-// 	}
-// 	// this object will be validated when adding the client
-// 	wgsc := &api.WireguardServerConfig{
-// 		UID:        bucketName,
-// 		Address:    api.ParseCIDR("10.100.0.10/32"),
-// 		ListenPort: 51820,
-// 		PrivateKey: &serverPrivkey,
-// 		PostUp: []string{
-// 			"ip link set mtu 1500 dev ens4",
-// 			"ip link set mtu 1500 dev %i",
-// 			"sysctl -w net.ipv4.ip_forward=1",
-// 		},
-// 		PostDown: []string{
-// 			"sysctl -w net.ipv4.ip_forward=0",
-// 			"iptables -D FORWARD -o %i -j ACCEPT",
-// 			"iptables -D FORWARD -i %i -j ACCEPT",
-// 		},
-// 	}
-// 	if err := c.WireguardServerConfig().Create(wgsc); err != nil {
-// 		t.Fatalf("failed creating wg server config: %v", err)
-// 	}
-// 	encrypted, err := c.WireguardServerConfig().AddClient(bucketName, wgcc, []*openpgp.Entity{e})
-// 	if err != nil {
-// 		t.Fatalf("failed adding client to server: %v", err)
-// 	}
-
-// 	gotTunnelConfig, err := pgputils.ReadMessage(encrypted, e)
-// 	if err != nil {
-// 		t.Fatalf("failed reading message: %v", err)
-// 	}
-// 	if diff := cmp.Diff(expTunnelConfig, gotTunnelConfig); diff != "" {
-// 		t.Fatalf("unexpected tunnel config (-want +got):\n%s", diff)
-// 	}
-// }
