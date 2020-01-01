@@ -46,12 +46,6 @@ func main() {
 		PersistentPreRunE: cli.PersistentPreRunE,
 		SilenceUsage:      true,
 	}
-	configure := &cobra.Command{
-		Use:               "configure",
-		Short:             "Manage peers and server configurations.",
-		PersistentPreRunE: cli.PersistentPreRunE,
-		SilenceUsage:      true,
-	}
 	peers.AddCommand(
 		cli.PeerAddCmd(),
 		cli.PeerListCmd(),
@@ -66,16 +60,12 @@ func main() {
 		cli.DeleteServer(),
 		cli.NewCipherKey(),
 	)
-	configure.AddCommand(
-		cli.ConfigureSystemdServerCmd(),
-		cli.ConfigureSystemdPeerCmd(),
-		cli.ConfigureServerCmd(),
-		cli.ConfigurePeersCmd(),
-	)
 	root.AddCommand(
 		servers,
 		peers,
-		configure,
+		cli.InstallDaemons(),
+		cli.SyncServerCmd(),
+		cli.SyncPeersCmd(),
 		cli.RunWebServerCmd(),
 	)
 	root.PersistentFlags().BoolVar(&cli.O.Local, "local", false, "Fetch from local database instead of remote.")

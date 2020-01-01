@@ -2,19 +2,17 @@ package cli
 
 import (
 	"crypto/sha1"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/sandromello/wgadmin/pkg/api"
-
+	"github.com/ghodss/yaml"
 	"github.com/google/uuid"
+	"github.com/sandromello/wgadmin/pkg/api"
 	storeclient "github.com/sandromello/wgadmin/pkg/store/client"
-	"github.com/sandromello/wgadmin/pkg/system/wgpeer"
-	"github.com/sandromello/wgadmin/pkg/system/wgserver"
+	"github.com/sandromello/wgadmin/pkg/systemd"
 	"github.com/sandromello/wgadmin/pkg/wgtools"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -26,8 +24,9 @@ func hashFromByte(data []byte) string {
 	return string(s.Sum(nil))
 }
 
-func fetchState(server, configFile, cipherKey string) ([]byte, []byte, error) {
-	localConfigData, err := ioutil.ReadFile(configFile)
+// func fetchState(server, configFile, cipherKey string) ([]byte, []byte, error) {
+func fetchState(sc *api.ServerConfig) ([]byte, []byte, error) {
+	localConfigData, err := ioutil.ReadFile(sc.GetWireguardConfigFile())
 	if err != nil && !os.IsNotExist(err) {
 		return nil, nil, err
 	}
@@ -37,14 +36,14 @@ func fetchState(server, configFile, cipherKey string) ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 	defer client.Close()
-	wgsc, err := client.WireguardServerConfig().Get(server)
+	wgsc, err := client.WireguardServerConfig().Get(sc.Name)
 	if err != nil {
 		return nil, nil, err
 	}
 	if wgsc == nil {
-		return nil, nil, fmt.Errorf("wireguard server %q not found", server)
+		return nil, nil, fmt.Errorf("wireguard server %q not found", sc.Name)
 	}
-	remoteConfigData, err := wgsc.ParseWireguardServerConfigTemplate(cipherKey)
+	remoteConfigData, err := wgsc.ParseWireguardServerConfigTemplate(sc.ServerDaemon.CipherKey)
 	return localConfigData, remoteConfigData, err
 }
 
@@ -99,63 +98,75 @@ func conciliateState(configFile string, data []byte) ([]byte, error) {
 	return stdout, setDirty(false, configFile)
 }
 
-// ConfigureSystemdServerCmd configure the systemd for running
-// the wireguard server manager
-func ConfigureSystemdServerCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:          "systemd-server",
-		Short:        "Configure Systemd for the Wireguard Server Manager.",
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			wgserver.StopWireguardManager()
-			return wgserver.InstallWireguardManager()
-		},
+func parseServerConfigFile(path string) (*api.ServerConfig, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
 	}
-	return cmd
+	var c api.ServerConfig
+	return &c, yaml.Unmarshal(data, &c)
 }
 
-// ConfigureSystemdPeerCmd configure the systemd for running
-// the wireguard peer manager
-func ConfigureSystemdPeerCmd() *cobra.Command {
+// InstallDaemons install and configure all daemons on the system
+func InstallDaemons() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "systemd-peer",
-		Short:        "Configure Systemd for the Wireguard Peer Manager.",
+		Use:          "install-daemons",
+		Short:        "Install and configure systemd manager daemons.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			wgpeer.StopPeerManager()
-			return wgpeer.InstallPeerManager()
-		},
-	}
-	return cmd
-}
-
-// ConfigureServerCmd configure a wireguard server command
-func ConfigureServerCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:          "server SERVER",
-		Short:        "Configure a Wireguard Server.",
-		SilenceUsage: true,
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) < 1 {
-				return errors.New("missing the resource name")
+			sc, err := parseServerConfigFile(O.ServerConfigPath)
+			if err != nil {
+				return err
 			}
-			return nil
+			fmt.Println("Installing", sc.ServerDaemon.GetUnitName())
+			systemd.StopDaemon(&sc.ServerDaemon)
+			if err := systemd.InstallWireguardManager(&sc.ServerDaemon); err != nil {
+				return err
+			}
+			fmt.Println("Installing", sc.PeerDaemon.GetUnitName())
+			systemd.StopDaemon(&sc.PeerDaemon)
+			return systemd.InstallPeerManager(&sc.PeerDaemon)
 		},
+	}
+	cmd.Flags().StringVarP(&O.ServerConfigPath, "config-file", "c", "", "The wgadmin config file.")
+	return cmd
+}
+
+// SyncServerCmd syncronizes server configuration
+func SyncServerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "sync-servers",
+		Short:             "Synchronize servers in Wireguard.",
+		SilenceUsage:      true,
+		PersistentPreRunE: PersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			sc, err := parseServerConfigFile(O.ServerConfigPath)
+			if err != nil {
+				return err
+			}
+			// Configuring runtime defaults
+			os.Setenv("GCS_BUCKET_NAME", sc.BucketName)
+			if sc.ServerDaemon.CipherKey == "" {
+				sc.ServerDaemon.CipherKey = os.Getenv("CIPHER_KEY")
+				if sc.ServerDaemon.CipherKey == "" {
+					return fmt.Errorf("Cipher Key is not set")
+				}
+			}
 			conciliate := func(logf *log.Entry) error {
-				logf.Infof("Configuring server %s ...", args[0])
-				localData, remoteData, err := fetchState(args[0], O.Configure.ConfigFile, O.Configure.CipherKey)
+				logf.Infof("Synchronize server %s ...", sc.Name)
+				localData, remoteData, err := fetchState(sc)
 				if err != nil {
 					return err
 				}
-				isDirty, err := checkDirty(O.Configure.ConfigFile)
+				wireguardConfigFile := sc.GetWireguardConfigFile()
+				isDirty, err := checkDirty(wireguardConfigFile)
 				if err != nil {
 					return err
 				}
 				isConciliateOperation := hashFromByte(localData) != hashFromByte(remoteData)
 				logf.Infof("dirty=%v, conciliate=%v", isDirty, isConciliateOperation)
 				if isConciliateOperation || isDirty {
-					stdout, err := conciliateState(O.Configure.ConfigFile, remoteData)
+					stdout, err := conciliateState(wireguardConfigFile, remoteData)
 					if err != nil {
 						return fmt.Errorf("%v. %v", strings.TrimSuffix(string(stdout), "\n"), err)
 					}
@@ -164,7 +175,7 @@ func ConfigureServerCmd() *cobra.Command {
 				return nil
 			}
 
-			isControlLoop := O.Configure.Sync != time.Duration(0)
+			isControlLoop := sc.ServerDaemon.SyncTime != api.Duration(0)
 			for {
 				now := time.Now().UTC()
 				logf := log.WithField("job", uuid.New().String()[:6])
@@ -175,30 +186,29 @@ func ConfigureServerCmd() *cobra.Command {
 					logf.Error(err)
 				}
 				logf.Infof("Completed in %vs\n", time.Since(now).Seconds())
-				time.Sleep(O.Configure.Sync)
+				time.Sleep(time.Duration(sc.ServerDaemon.SyncTime))
 			}
 		},
 	}
-	cmd.Flags().StringVar(&O.Configure.ConfigFile, "config", "/etc/wireguard/wg0.conf", "The wireguard server config file path.")
-	cmd.Flags().StringVar(&O.Configure.CipherKey, "cipher-key", os.Getenv("CIPHER_KEY"), "The base64 encoded cipher key used to decrypt the private key, it could be set using CIPHER_KEY environment variable.")
-	cmd.Flags().DurationVar(&O.Configure.Sync, "sync", time.Duration(0), "If enable will run a control loop watching the changes from remote.")
+	cmd.Flags().StringVarP(&O.ServerConfigPath, "config-file", "c", "", "The wgadmin config file.")
 	return cmd
 }
 
-// ConfigurePeersCmd configure peers command
-func ConfigurePeersCmd() *cobra.Command {
+// SyncPeersCmd synchronize peers configuration
+func SyncPeersCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "peer SERVER",
-		Short:        "Configure the peers in a Wireguard Server.",
-		SilenceUsage: true,
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) < 1 {
-				return errors.New("missing the resource name")
-			}
-			return nil
-		},
+		Use:               "sync-peers",
+		Short:             "Synchronize peers in a Wireguard Server.",
+		SilenceUsage:      true,
+		PersistentPreRunE: PersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			iface := O.Configure.InterfaceName
+			// Configuring runtime defaults
+			sc, err := parseServerConfigFile(O.ServerConfigPath)
+			if err != nil {
+				return err
+			}
+			os.Setenv("GCS_BUCKET_NAME", sc.BucketName)
+			iface := sc.PeerDaemon.InterfaceName
 			conciliate := func(logf *log.Entry) error {
 				client, err := storeclient.New(GlobalDBFile, GlobalBoltOptions)
 				if err != nil {
@@ -206,7 +216,7 @@ func ConfigurePeersCmd() *cobra.Command {
 				}
 				defer client.Close()
 				// remove any revoked peers found in remote
-				desiredPeers, err := client.Peer().ListByServer(args[0])
+				desiredPeers, err := client.Peer().ListByServer(sc.Name)
 				if err != nil {
 					return fmt.Errorf("failed listing peers: %v", err)
 				}
@@ -231,7 +241,7 @@ func ConfigurePeersCmd() *cobra.Command {
 				}
 				for _, pubkey := range currentPeers {
 					logf.Debugf("op=conciliate, peer=%s", pubkey)
-					cur, err := client.Peer().SearchByPubKey(args[0], pubkey)
+					cur, err := client.Peer().SearchByPubKey(sc.Name, pubkey)
 					if err != nil {
 						return fmt.Errorf("failed retrieving peer from store: %v", err)
 					}
@@ -278,12 +288,12 @@ func ConfigurePeersCmd() *cobra.Command {
 				logf.WithField("dirty", dirty).Infof("Found %v local and %v remote peers", len(currentPeers), len(desiredPeers))
 				return nil
 			}
-			isControlLoop := O.Configure.Sync != time.Duration(0)
+			isControlLoop := sc.PeerDaemon.SyncTime != api.Duration(0)
 			for {
 				now := time.Now().UTC()
 				logf := log.WithFields(map[string]interface{}{
 					"job":    uuid.New().String()[:6],
-					"server": args[0],
+					"server": sc.Name,
 				})
 				if err := conciliate(logf); err != nil {
 					if !isControlLoop {
@@ -292,11 +302,10 @@ func ConfigurePeersCmd() *cobra.Command {
 					logf.Error(err)
 				}
 				logf.Infof("Completed in %vs", time.Since(now).Seconds())
-				time.Sleep(O.Configure.Sync)
+				time.Sleep(time.Duration(sc.PeerDaemon.SyncTime))
 			}
 		},
 	}
-	cmd.Flags().StringVar(&O.Configure.InterfaceName, "iface", "wg0", "The wireguard peers config file path.")
-	cmd.Flags().DurationVar(&O.Configure.Sync, "sync", time.Duration(0), "If enable will run a control loop watching the changes from remote.")
+	cmd.Flags().StringVarP(&O.ServerConfigPath, "config-file", "c", "", "The wgadmin config file.")
 	return cmd
 }

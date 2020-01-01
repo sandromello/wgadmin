@@ -8,7 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -17,9 +18,30 @@ import (
 	"golang.org/x/crypto/curve25519"
 )
 
+func (d ServerDaemon) GetUnitName() string    { return d.UnitName }
+func (d ServerDaemon) GetSystemdPath() string { return d.SystemdPath }
+func (d PeerDaemon) GetUnitName() string      { return d.UnitName }
+func (d PeerDaemon) GetSystemdPath() string   { return d.SystemdPath }
+
+// GetWireguardConfigFile returns the path to the wireguard config file
+func (d ServerConfig) GetWireguardConfigFile() string {
+	return filepath.Join(d.ServerDaemon.ConfigPath, d.ServerDaemon.ConfigFile)
+}
+
+// UnmarshalJSON deserialize a time.Duration
+func (d *Duration) UnmarshalJSON(data []byte) error {
+	unquoted, err := strconv.Unquote(string(data))
+	if err != nil {
+		return nil
+	}
+	duration, err := time.ParseDuration(unquoted)
+	d2 := Duration(duration)
+	*d = d2
+	return err
+}
+
 // PublicKey computes a public key from the private key k.
-//
-// PublicKey should only be called when k is a private key.
+// It should only be called when k is a private key.
 func (k Key) PublicKey() Key {
 	var (
 		pub  [KeyLen]byte
@@ -33,7 +55,6 @@ func (k Key) PublicKey() Key {
 }
 
 // String returns the base64-encoded string representation of a Key.
-//
 // ParseKey can be used to produce a new Key from this string.
 func (k Key) String() string {
 	return base64.StdEncoding.EncodeToString(k[:])
@@ -222,23 +243,13 @@ func ParseCIDR(s string) *net.IPNet {
 func HandleTemplates(text string, file io.Writer, data interface{}) error {
 	t, err := template.New("").Parse(text)
 	if err != nil {
-		return fmt.Errorf("failed parsing template, err =%v", err)
+		return fmt.Errorf("failed parsing template, err=%v", err)
 	}
 	err = t.Execute(file, data)
 	if err != nil {
 		return fmt.Errorf("failed executing template, err=%v", err)
 	}
 	return nil
-}
-
-// WriteToIniFile parse the wireguard server config template and write to a given file
-func (w *WireguardServerConfig) WriteToIniFile(filePath string) error {
-	f, err := os.Create(filePath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return HandleTemplates(string(templateWireguardServerConfig), f, w)
 }
 
 // ParseWireguardServerConfigTemplate parse to []byte the wireguard server config template

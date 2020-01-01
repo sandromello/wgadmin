@@ -52,12 +52,12 @@ type CmdWebServer struct {
 
 type CmdOptions struct {
 	ShowVersionAndExit bool
+	ServerConfigPath   string
 	Output             string
 	Local              bool
 
 	Server    CmdServer
 	Peer      CmdPeer
-	Configure CmdConfigure
 	WebServer CmdWebServer
 }
 

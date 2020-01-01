@@ -2,7 +2,44 @@ package api
 
 import (
 	"net"
+	"time"
 )
+
+// Duration a custom time.Duration
+type Duration time.Duration
+
+// Daemon represents a systemd unit
+type Daemon interface {
+	GetUnitName() string
+	GetSystemdPath() string
+}
+
+// ServerConfig is all the required configuration to run the
+// daemons that sync peers and servers
+type ServerConfig struct {
+	Name         string       `json:"name"`
+	BucketName   string       `json:"bucketName"`
+	ServerDaemon ServerDaemon `json:"server"`
+	PeerDaemon   PeerDaemon   `json:"peer"`
+}
+
+// PeerDaemon is a configuration to tell how to synchronize and configure peers
+type PeerDaemon struct {
+	UnitName      string   `json:"unitName"`
+	SystemdPath   string   `json:"systemdPath"`
+	SyncTime      Duration `json:"syncTime"`
+	InterfaceName string   `json:"interfaceName"`
+}
+
+// ServerDaemon is a configuration to tell how to synchronize and configure a server
+type ServerDaemon struct {
+	UnitName    string   `json:"unitName"`
+	SystemdPath string   `json:"systemdPath"`
+	SyncTime    Duration `json:"syncTime"`
+	CipherKey   string   `json:"cipherKey"`
+	ConfigPath  string   `json:"configPath"`
+	ConfigFile  string   `json:"configFile"`
+}
 
 // KeyLen is the expected key length for a WireGuard key.
 const KeyLen = 32 // wgh.KeyLen
@@ -99,7 +136,6 @@ type WireguardClientConfig struct {
 
 	InterfaceClientConfig InterfaceClientConfig `json:"interface"`
 	PeerClientConfig      PeerClientConfig      `json:"peer"`
-	// PgpMessage
 }
 
 // InterfaceClientConfig represents a Interface section on a client wireguard config

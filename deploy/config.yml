@@ -1,0 +1,14 @@
+name: wg-testing
+bucketName: wireguard
+server:
+  unitName: wgadmin-server.service
+  systemdPath: /etc/systemd/system
+  syncTime: 1m
+  configPath: /etc/wireguard
+  configFile: wg0.conf
+  cipherKey: 
+peer:
+  unitName: wgadmin-peer.service
+  systemdPath: /etc/systemd/system
+  syncTime: 1m
+  interfaceName: wg0
