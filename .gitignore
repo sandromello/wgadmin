@@ -1,3 +1,4 @@
 .vagrant
 rootfs/
 wireguard.db
+dist/
