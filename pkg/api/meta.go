@@ -155,29 +155,6 @@ func (p *Peer) ParseAllowedIPs() net.IP {
 	return ipaddr
 }
 
-// ParseDNSToComma parses the DNS config to a comma for each entry
-func (i InterfaceClientConfig) ParseDNSToComma() string {
-	var dnss []string
-	for _, d := range i.DNS {
-		dnss = append(dnss, d.String())
-	}
-	return strings.Join(dnss, ", ")
-}
-
-// ParseAllowedIPsToComma parses the AllowedIPs config to a comma for each entry
-func (p PeerClientConfig) ParseAllowedIPsToComma() string {
-	var ips []string
-	for _, ip := range p.AllowedIPs {
-		ips = append(ips, ip.String())
-	}
-	return strings.Join(ips, ", ")
-}
-
-// MarshalJSON serializes to an encoded format
-// func (k *Key) MarshalJSON() ([]byte, error) {
-// 	return json.Marshal(k.String())
-// }
-
 // NewKey creates a Key from an existing byte slice.  The byte slice must be
 // exactly 32 bytes in length.
 func NewKey(b []byte) (Key, error) {

@@ -130,22 +130,6 @@ type PeerStatus struct {
 	PublicKey   *Key   `json:"publicKey"`
 }
 
-// WireguardClientConfig represents a wireguard client config
-type WireguardClientConfig struct {
-	UID string `json:"uid"`
-
-	InterfaceClientConfig InterfaceClientConfig `json:"interface"`
-	PeerClientConfig      PeerClientConfig      `json:"peer"`
-}
-
-// InterfaceClientConfig represents a Interface section on a client wireguard config
-// https://git.zx2c4.com/WireGuard/about/src/tools/man/wg.8
-type InterfaceClientConfig struct {
-	PrivateKey *Key       `json:"privateKey"`
-	Address    *net.IPNet `json:"address"`
-	DNS        []net.IP   `json:"dns"`
-}
-
 // PeerClientConfig represents a Peer section on a client wireguard config
 // https://git.zx2c4.com/WireGuard/about/src/tools/man/wg.8
 type PeerClientConfig struct {

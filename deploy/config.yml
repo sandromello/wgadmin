@@ -6,7 +6,7 @@ server:
   syncTime: 1m
   configPath: /etc/wireguard
   configFile: wg0.conf
-  cipherKey: 
+  cipherKey: null
 peer:
   unitName: wgadmin-peer.service
   systemdPath: /etc/systemd/system

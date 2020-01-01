@@ -19,7 +19,6 @@ import (
 
 const (
 	wgserverPrefix      string = "/wgsconfig"
-	wgclientPrefix      string = "/wgcconfig"
 	peerPrefix          string = "/peers"
 	bucketName          string = "wireguard"
 	gcsTimeoutInSeconds        = 10
@@ -27,7 +26,6 @@ const (
 
 // Client objects to interact with store
 type Client interface {
-	WireguardClientConfig() WireguardClientConfig
 	WireguardServerConfig() WireguardServerConfig
 	Peer() Peer
 	SyncRemote() error
@@ -35,16 +33,9 @@ type Client interface {
 }
 
 type coreClient struct {
-	wireguardClientConfig *wireguardClientConfig
 	wireguardServerConfig *wireguardServerConfig
 	peer                  *peer
-
-	bucket string
-}
-
-// WireguardClientConfig creates a client to interact with wg client config
-func (c *coreClient) WireguardClientConfig() WireguardClientConfig {
-	return c.wireguardClientConfig
+	bucket                string
 }
 
 // WireguardServerConfig creates a client to interact with wg server config
@@ -105,10 +96,6 @@ func New(dbfile string, opts *bolt.Options) (Client, error) {
 		return nil, err
 	}
 	return &coreClient{
-		wireguardClientConfig: &wireguardClientConfig{
-			store:  db,
-			prefix: wgclientPrefix,
-		},
 		wireguardServerConfig: &wireguardServerConfig{
 			store:  db,
 			prefix: wgserverPrefix,
