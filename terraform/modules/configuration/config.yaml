@@ -1,0 +1,24 @@
+name: ${server_name}
+bucketName: ${bucket_name}
+server:
+  # unitName: wgadmin-server.service
+  # systemdPath: /etc/systemd/system
+  # syncTime: 1m
+  # configPath: /etc/wireguard
+  # configFile: wg0.conf
+  # cipherKey: null
+  unitName: ${server_unit_name}
+  systemdPath: ${systemd_path}
+  syncTime: ${server_sync_time}
+  configPath: ${config_path}
+  configFile: ${config_file}
+  cipherKey: ${cipherKey}
+peer:
+  # unitName: wgadmin-peer.service
+  # systemdPath: /etc/systemd/system
+  # syncTime: 1m
+  # interfaceName: wg0
+  unitName: ${peer_unit_name}
+  systemdPath: ${systemd_path}
+  syncTime: ${peer_sync_time}
+  interfaceName: ${interface_name}
