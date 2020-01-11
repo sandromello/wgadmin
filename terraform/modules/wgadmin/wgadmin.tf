@@ -3,6 +3,7 @@ data "template_file" "install" {
 
   vars = {
     wgadmin_config_path      = var.wgadmin_config_path
+    wgadmin_config_file      = var.wgadmin_config_file
     wgadmin_releases_url     = var.wgadmin_releases_url
     wgadmin_version          = var.wgadmin_version
     wgadmin_version_checksum = var.wgadmin_version_checksum

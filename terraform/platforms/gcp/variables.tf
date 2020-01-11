@@ -6,6 +6,14 @@ variable "gcp_project_name" {
   description = "The GCP project name"
 }
 
+variable "gcp_billing_account" {
+  description = "The ID of the billing account to associate this project with"
+}
+
+variable "gcp_organization_id" {
+  description = "The organization ID"
+}
+
 variable "gcp_machine_type" {
   description = "The GCP instance type"
   default     = "f1-micro"
@@ -13,6 +21,14 @@ variable "gcp_machine_type" {
 
 variable "gcp_zone" {
   description = "The name of the gcp zone"
+}
+
+variable "gcp_activate_apis" {
+  type        = list(string)
+  description = "A list of apis to activate, execute 'gcloud services list' to see the list of API's"
+  default     = [
+    "compute.googleapis.com",
+  ]
 }
 
 variable "gcp_cidr_subnet" {

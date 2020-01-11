@@ -1,5 +1,6 @@
 locals {
-  wgadmin_config_path  = "/etc/wireguard/wgadmin.yaml"
+  wgadmin_config_path  = "/etc/wireguard"
+  wgadmin_config_file  = "wgadmin.yaml"
   wgadmin_releases_url = "https://github.com/sandromello/wgadmin/releases/download"
 }
 
@@ -26,7 +27,7 @@ variable "cipher_key" {
 }
 
 variable "wgadmin_release" {
-  type = Object({
+  type = object({
     version  = string
     checksum = string
   })
@@ -36,7 +37,7 @@ variable "wgadmin_release" {
 module "configuration" {
   source = "../../modules/configuration"
 
-  server_name      = var.server_name
+  server_name      = var.wireguard_server_name
   bucket_name      = var.gcs_bucket_name
 
   server_sync_time = var.server_sync_time
@@ -48,6 +49,7 @@ module "wgadmin" {
   source = "../../modules/wgadmin"
 
   wgadmin_config_path      = local.wgadmin_config_path
+  wgadmin_config_file      = local.wgadmin_config_file
   wgadmin_releases_url     = local.wgadmin_releases_url
   wgadmin_version          = var.wgadmin_release.version
   wgadmin_version_checksum = var.wgadmin_release.checksum
@@ -55,5 +57,6 @@ module "wgadmin" {
 }
 
 output "install_script" {
-  value = module.wgadmin.install_script.rendered
+  value     = module.wgadmin.install_script
+  sensitive = true
 }

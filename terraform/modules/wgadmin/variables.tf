@@ -1,5 +1,9 @@
+variable "wgadmin_config_file" {
+  description = "The name of the wgadmin config file"
+}
+
 variable "wgadmin_config_path" {
-  description = "The config path for the wgadmin"
+  description = "The config path of the wgadmin"
 }
 
 variable "wgadmin_releases_url" {

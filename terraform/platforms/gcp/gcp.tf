@@ -30,7 +30,7 @@ resource "google_compute_network" "default" {
   name                    = local.network_name
   auto_create_subnetworks = false
   routing_mode            = "REGIONAL"
-  project                 = google_project.services.project_id
+  project                 = google_project.wgadmin.project_id
 
   depends_on = [
     "google_project_service.project_services"
@@ -38,8 +38,8 @@ resource "google_compute_network" "default" {
 }
 
 resource "google_compute_route" "route" {
-  project = google_project.services.project_id
-  network = google_compute_network.network.name
+  project = google_project.wgadmin.project_id
+  network = google_compute_network.default.name
 
   name                   = "egress-internet"
   description            = "route through IGW to access internet"
@@ -49,21 +49,26 @@ resource "google_compute_route" "route" {
   priority               = "1000"
 
   depends_on = [
-    "google_compute_network.network"
+    "google_compute_network.default"
   ]
 }
 
 resource "google_compute_firewall" "wireguard-server" {
   name    = "wireguard-server"
-  network = local.network_name
-  project = google_project.services.project_id
+  network = google_compute_network.default.name
+  project = google_project.wgadmin.project_id
 
   allow {
     protocol = "udp"
     ports    = ["51820"]
   }
 
-  source_tags = ["wgadmin"]
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
 }
 
 resource "google_compute_address" "static-ip" {
@@ -78,7 +83,6 @@ resource "google_compute_subnetwork" "subnetwork" {
   ip_cidr_range            = cidrsubnet(var.gcp_cidr_subnet.ip_range, var.gcp_cidr_subnet.bits, var.gcp_cidr_subnet.net_num)
   region                   = substr(var.gcp_zone, 0, length(var.gcp_zone)-2)
   private_ip_google_access = false
-  enable_flow_logs         = false
   network                  = google_compute_network.default.name
   project                  = google_project.wgadmin.project_id
 }
@@ -108,5 +112,9 @@ resource "google_compute_instance" "default" {
     }
   }
 
-  metadata_startup_script = module.wgadmin.install_script
+  service_account {
+    scopes = ["storage-ro"]
+  }
+
+  metadata_startup_script   = module.wgadmin.install_script
 }
