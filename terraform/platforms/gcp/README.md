@@ -19,14 +19,14 @@ This Terraform module will provision a project and a single instance that runs t
 ```bash
 gcloud auth application-default login
 PROJECT_ID=
-export GCS_BUCKET_NAME=wgadmin-$(openssl rand -hex 3)
-WG_ENDPOINT=<dns-address:51820>
+# export GCS_BUCKET_NAME=wgadmin-$(openssl rand -hex 3)
+# WG_ENDPOINT=<dns-address:51820>
 
-gsutil mb -p $PROJECT_ID -c nearline gs://wgadmin
-CIPHER_KEY=$(wgadmin server init myserver --endpoint=$WG_ENDPOINT --iface ens4 --override)
+# gsutil mb -p $PROJECT_ID -c nearline gs://wgadmin
+# CIPHER_KEY=$(wgadmin server init myserver --endpoint=$WG_ENDPOINT --iface ens4 --override)
 
 terraform init .
-TF_VAR_cipher_key=$CIPHER_KEY
+TF_VAR_cipher_key=$(wgadmin server new-cipher-key)
 terraform apply .
 ```
 

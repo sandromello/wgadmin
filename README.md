@@ -20,16 +20,36 @@ You'll need to configure a Oauth Client ID in order to run the admin webapp. If 
 > **WARNING:** Make sure to run the server with TLS!
 
 ```bash
-kubectl create ns wgadmin
-kubectl create secret -n wgadmin generic tls-ssl-wgadm \
+NAMESPACE=wgadmin
+PROJECT_ID=wgadmin-$(openssl rand -hex 3)
+GCS_BUCKET_NAME=$PROJECT_ID
+GOOGLE_CLIENT_ID=
+# Create a GCS bucket
+# gsutil mb -p $PROJECT_ID -c nearline gs://$GCS_BUCKET_NAME
+kubectl create ns $NAMESPACE
+kubectl create secret -n $NAMESPACE generic tls-ssl-wgadm \
     --from-file=tls-cert=path/to/tls-cert.pem \
-    --from-file=tls-cert-key=path/to/tls-cert-key.pem
-# GOOGLE_APPLICATION_CREDENTIALS=
-# kubectl create secret -n wgadmin generic google-credentials \
-#     --from-file=serviceaccount=$GOOGLE_APPLICATION_CREDENTIALS \
-#     --from-file=GCS_BUCKET_NAME=wgadmin-$(openssl rand -hex 3)
-
-kubectl create secret -n wgadmin generic webapp-config --from-file=config.yaml=./webapp-config.yml
+    --from-file=tls-cert-key=path/to/tle-cert-key.pem
+# Create a service account with Storage Admin role
+GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
+kubectl create secret -n $NAMESPACE generic google-credentials \
+    --from-file=serviceaccount=$GOOGLE_APPLICATION_CREDENTIALS
+cat - >webapp-config.yml <<EOF
+httpPort: '8000'
+allowedDomains:
+- acme.tld
+- gmail.com
+pageConfig:
+  faviconURL: null
+  googleClientID: $GOOGLE_CLIENT_ID
+  googleRedirectURI: https://acme.tld
+tlsKeyFile: /etc/ssl/custom-certs/tls-cert-key.pem
+tlsCertFile: /etc/ssl/custom-certs/tls-cert.pem
+googleApplicationCredentials: /var/run/secrets/google/serviceaccount
+gcsBucketName: $GCS_BUCKET_NAME
+EOF
+kubectl create secret -n $NAMESPACE generic webapp-config --from-file=config.yaml=./webapp-config.yml
+kubectl apply -f deploy/webapp/all.yml
 ```
 
 

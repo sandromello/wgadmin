@@ -28,7 +28,7 @@ spec:
     spec:
       containers:
       - name: wgadm
-        image: sandromello/wgadmin:v0.0.4-10
+        image: sandromello/wgadmin:v0.0.5-dev
         imagePullPolicy: Always
         args:
         - run-server
@@ -52,9 +52,9 @@ spec:
         secret:
           secretName: tls-ssl-wgadm
           items:
-          - key: tls-cert.pem
+          - key: tls-cert
             path: tls-cert.pem
-          - key: tls-cert-key.pem
+          - key: tls-cert-key
             path: tls-cert-key.pem
       - name: google-credentials-volume
         secret:
