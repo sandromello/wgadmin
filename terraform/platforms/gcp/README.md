@@ -13,7 +13,7 @@ This Terraform module will provision a project and a single instance that runs t
 
 1. Authenticate to GCP
 2. Create a bucket and a wireguard server
-3. Copy the `terraform.tfvars-example` to `terraform.tfvars` and edit accordingly
+3. Create a `terraform.tfvars` - copy the example below
 4. Apply your configuration
 
 ```bash
@@ -25,7 +25,6 @@ WG_ENDPOINT=<dns-address:51820>
 gsutil mb -p $PROJECT_ID -c nearline gs://wgadmin
 CIPHER_KEY=$(wgadmin server init myserver --endpoint=$WG_ENDPOINT --iface ens4 --override)
 
-cp terraform.tfvars-example terraform.tfvars
 terraform init .
 TF_VAR_cipher_key=$CIPHER_KEY
 terraform apply .
