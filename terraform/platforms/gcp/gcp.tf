@@ -116,5 +116,5 @@ resource "google_compute_instance" "default" {
     scopes = ["storage-ro"]
   }
 
-  metadata_startup_script   = module.wgadmin.install_script
+  metadata_startup_script   = module.wgadmin.ubuntu_install_script
 }

@@ -60,8 +60,3 @@ module "wgadmin" {
   wgadmin_config           = module.configuration.configuration
   wireguard_ubuntu_version = var.wireguard_ubuntu_version
 }
-
-output "install_script" {
-  value     = module.wgadmin.install_script
-  sensitive = true
-}

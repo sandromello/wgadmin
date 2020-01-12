@@ -1,5 +1,5 @@
 data "template_file" "install" {
-  template = file("${path.module}/resources/install.sh")
+  template = file("${path.module}/resources/ubuntu-install.sh")
 
   vars = {
     wgadmin_config_path      = var.wgadmin_config_path
