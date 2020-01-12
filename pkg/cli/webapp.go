@@ -2,13 +2,26 @@ package cli
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"path"
 
+	"github.com/ghodss/yaml"
+	"github.com/gorilla/securecookie"
+	"github.com/sandromello/wgadmin/pkg/api"
 	"github.com/sandromello/wgadmin/pkg/webapp"
 	"github.com/spf13/cobra"
 )
+
+func parseWebAppConfigFile(path string) (*api.WebApp, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var c api.WebApp
+	return &c, yaml.Unmarshal(data, &c)
+}
 
 // RunWebServerCmd start the webserver
 // https://console.developers.google.com/apis/dashboard
@@ -19,6 +32,11 @@ func RunWebServerCmd() *cobra.Command {
 		PersistentPreRunE: PersistentPreRunE,
 		SilenceUsage:      true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			webappc, err := parseWebAppConfigFile(O.ServerConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed parsing webapp config file: %v", err)
+			}
+			webappc.SetDefaults()
 			mux := http.NewServeMux()
 
 			// Static Files
@@ -26,40 +44,28 @@ func RunWebServerCmd() *cobra.Command {
 			fs := http.FileServer(http.Dir(staticDir))
 			mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
-			handler := webapp.NewHandler(
-				[]byte(`mykey`),
-				&O.WebServer.PageConfig,
-				*O.WebServer.AllowedDomains,
-			)
+			sessionKey := securecookie.GenerateRandomKey(32)
+			if sessionKey == nil {
+				return fmt.Errorf("failed generating session key")
+			}
+			handler := webapp.NewHandler(sessionKey, webappc.PageConfig, webappc.AllowedDomains)
 			mux.HandleFunc("/", handler.Index)
 			mux.HandleFunc("/signin", handler.Signin)
 			mux.HandleFunc("/signout/", handler.Signout)
 			mux.HandleFunc("/peers/", handler.Peers)
-			address := fmt.Sprintf(":%s", O.WebServer.HTTPPort)
+			address := fmt.Sprintf(":%s", webappc.HTTPPort)
 			log.Printf("Starting the webserver at :%s ...", address)
-			if O.WebServer.TLSKeyFile != "" && O.WebServer.TLSCertFile != "" {
+			if webappc.TLSKeyFile != "" && webappc.TLSCertFile != "" {
 				return http.ListenAndServeTLS(
 					address,
-					O.WebServer.TLSCertFile,
-					O.WebServer.TLSKeyFile,
+					webappc.TLSCertFile,
+					webappc.TLSKeyFile,
 					mux,
 				)
 			}
-			return http.ListenAndServe(fmt.Sprintf(":%s", O.WebServer.HTTPPort), mux)
+			return http.ListenAndServe(fmt.Sprintf(":%s", webappc.HTTPPort), mux)
 		},
 	}
-	pagec := &O.WebServer.PageConfig
-	cmd.Flags().StringVar(&O.WebServer.HTTPPort, "port", "8000", "The port of the server.")
-	cmd.Flags().StringVar(&O.WebServer.TLSKeyFile, "tls-key-file", "", "The certificate private key path.")
-	cmd.Flags().StringVar(&O.WebServer.TLSCertFile, "tls-cert-file", "", "The certificate path.")
-	O.WebServer.AllowedDomains = cmd.Flags().StringSlice("allowed-domains", []string{}, "A list of permitted domains that will be able to sign in.")
-	cmd.Flags().StringVar(&pagec.GoogleClientID, "google-client-id", "", "The Google Client ID.")
-	cmd.Flags().StringVar(&pagec.GoogleRedirectURI, "google-redirect-uri", "", "The Google Redirect URI address.")
-	cmd.Flags().StringVar(&pagec.Title, "page-title", "VPN Service", "The title of the page.")
-	cmd.Flags().StringVar(&pagec.TemplatePath, "template-path", "web/templates", "The path of html file templates.")
-	cmd.Flags().StringVar(&pagec.ThemeCSSURL, "theme-css-url", "/static/themes/default/styles.css", "The CSS theme.")
-	cmd.Flags().StringVar(&pagec.LogoURL, "logo-url", "/static/img/logo.png", "The logo URL.")
-	cmd.Flags().StringVar(&pagec.FaviconURL, "favicon-url", "", "The favicon URL.")
-	cmd.Flags().StringVar(&pagec.NavBarLink, "navbar-link", "https://github.com/sandromello/wgadmin", "Custom link for the navbar logo.")
+	cmd.Flags().StringVarP(&O.ServerConfigPath, "config-file", "c", "", "The wgadmin webapp config file.")
 	return cmd
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/sandromello/wgadmin/pkg/api"
 	"github.com/sandromello/wgadmin/pkg/store"
 	storeclient "github.com/sandromello/wgadmin/pkg/store/client"
-	"github.com/sandromello/wgadmin/pkg/webapp"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -42,13 +41,12 @@ type CmdConfigure struct {
 	Sync          time.Duration
 }
 
-type CmdWebServer struct {
-	HTTPPort       string
-	AllowedDomains *[]string
-	PageConfig     webapp.PageConfig
-	TLSKeyFile     string
-	TLSCertFile    string
-}
+// type CmdWebServer struct {
+// 	HTTPPort       string
+// 	AllowedDomains *[]string
+// 	TLSKeyFile     string
+// 	TLSCertFile    string
+// }
 
 type CmdOptions struct {
 	ShowVersionAndExit bool
@@ -56,9 +54,9 @@ type CmdOptions struct {
 	Output             string
 	Local              bool
 
-	Server    CmdServer
-	Peer      CmdPeer
-	WebServer CmdWebServer
+	Server CmdServer
+	Peer   CmdPeer
+	// WebServer CmdWebServer
 }
 
 const (

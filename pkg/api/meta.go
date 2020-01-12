@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -17,6 +18,35 @@ import (
 	"github.com/sandromello/wgadmin/pkg/util"
 	"golang.org/x/crypto/curve25519"
 )
+
+func (w *WebApp) SetDefaults() {
+	if w.GCSBucketName != "" {
+		os.Setenv("GCS_BUCKET_NAME", w.GCSBucketName)
+	}
+	if w.GoogleApplicationCredentials != "" {
+		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", w.GoogleApplicationCredentials)
+	}
+	if w.HTTPPort == "" {
+		w.HTTPPort = "8000"
+	}
+	if w.PageConfig != nil {
+		if w.PageConfig.LogoURL == "" {
+			w.PageConfig.LogoURL = "/static/img/logo.png"
+		}
+		if w.PageConfig.Title == "" {
+			w.PageConfig.Title = "Wgadmin VPN Web App"
+		}
+		if w.PageConfig.NavBarLink == "" {
+			w.PageConfig.NavBarLink = "https://github.com/sandromello/wgadmin"
+		}
+		if w.PageConfig.TemplatePath == "" {
+			w.PageConfig.TemplatePath = "web/templates"
+		}
+		if w.PageConfig.ThemeCSSURL == "" {
+			w.PageConfig.ThemeCSSURL = "/static/themes/default/styles.css"
+		}
+	}
+}
 
 func (d ServerDaemon) GetUnitName() string    { return d.UnitName }
 func (d ServerDaemon) GetSystemdPath() string { return d.SystemdPath }

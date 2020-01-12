@@ -21,8 +21,8 @@ func init() {
 
 func main() {
 	root := &cobra.Command{
-		Use:   "wgapp",
-		Short: "wgapp manages users and wireguard servers.",
+		Use:   "wgadmin",
+		Short: "wgadmin manages users and wireguard servers.",
 		Run: func(cmd *cobra.Command, args []string) {
 			if cli.O.ShowVersionAndExit {
 				fmt.Println(string(version.JSON()))

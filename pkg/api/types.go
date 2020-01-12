@@ -5,6 +5,29 @@ import (
 	"time"
 )
 
+// WebApp holds information about the webapp server
+type WebApp struct {
+	HTTPPort                     string      `json:"httpPort"`
+	AllowedDomains               []string    `json:"allowedDomains"`
+	PageConfig                   *PageConfig `json:"pageConfig"`
+	TLSKeyFile                   string      `json:"tlsKeyFile"`
+	TLSCertFile                  string      `json:"tlsCertFile"`
+	GoogleApplicationCredentials string      `json:"googleApplicationCredentials"`
+	GCSBucketName                string      `json:"gcsBucketName"`
+}
+
+// PageConfig is used to configure the content of the webapp
+type PageConfig struct {
+	FaviconURL        string `json:"faviconURL"`
+	LogoURL           string `json:"logoURL"`
+	ThemeCSSURL       string `json:"themeCSSURL"`
+	GoogleClientID    string `json:"googleClientID"`
+	GoogleRedirectURI string `json:"googleRedirectURI"`
+	TemplatePath      string `json:"templatePath"`
+	Title             string `json:"title"`
+	NavBarLink        string `json:"navbarLink"`
+}
+
 // Duration a custom time.Duration
 type Duration time.Duration
 

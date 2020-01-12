@@ -1,3 +1,4 @@
+# daemon config
 name: wg-testing
 bucketName: wireguard
 server:
@@ -12,3 +13,17 @@ peer:
   systemdPath: /etc/systemd/system
   syncTime: 1m
   interfaceName: wg0
+---
+# webapp config
+httpPort: '8000'
+allowedDomains:
+- acme.tld
+- gmail.com
+pageConfig:
+  faviconURL: null
+  googleClientID: <google-client-id>
+  googleRedirectURI: https://yourdomain.tld
+tlsKeyFile: /etc/ssl/custom-certs/tls-cert-key.pem
+tlsCertFile: /etc/ssl/custom-certs/tls-cert.pem
+googleApplicationCredentials: /var/run/secrets/google/serviceaccount
+gcsBucketName: wgadmin-foo
