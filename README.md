@@ -20,28 +20,16 @@ You'll need to configure a Oauth Client ID in order to run the admin webapp. If 
 > **WARNING:** Make sure to run the server with TLS!
 
 ```bash
-GOOGLE_CLIENT_ID=910038580770-d5ei8pp52ds2333jt4nb78qkd7etp6me.apps.googleusercontent.com
-GOOGLE_REDIRECT_URI=http://foo.hash.com.br
-FAVICON_URL=https://hash.com.br/SMALL/favicon.png
-docker run -e GCS_BUCKET_NAME=wgadmin-foo --rm -it sandromello/wgadmin:v0.0.4 run-server \
-    --port 443 \
-    --allowed-domains=hashlab.com.br \
-    --allowed-domains=hash.com.br \
-    --favicon-url=$FAVICON_URL \
-    --google-client-id=$GOOGLE_CLIENT_ID \
-    --google-redirect-uri=$GOOGLE_REDIRECT_URI \
-    --page-title="MyOrg VPN"
-```
-
-```bash
 kubectl create ns wgadmin
 kubectl create secret -n wgadmin generic tls-ssl-wgadm \
     --from-file=tls-cert=path/to/tls-cert.pem \
     --from-file=tls-cert-key=path/to/tls-cert-key.pem
-GOOGLE_APPLICATION_CREDENTIALS=
-kubectl create secret -n wgadmin generic google-credentials \
-    --from-file=serviceaccount=$GOOGLE_APPLICATION_CREDENTIALS \
-    --from-file=GCS_BUCKET_NAME=wgadmin-$(openssl rand -hex 3)
+# GOOGLE_APPLICATION_CREDENTIALS=
+# kubectl create secret -n wgadmin generic google-credentials \
+#     --from-file=serviceaccount=$GOOGLE_APPLICATION_CREDENTIALS \
+#     --from-file=GCS_BUCKET_NAME=wgadmin-$(openssl rand -hex 3)
+
+kubectl create secret -n wgadmin generic webapp-config --from-file=config.yaml=./webapp-config.yml
 ```
 
 
