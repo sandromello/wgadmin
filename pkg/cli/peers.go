@@ -415,9 +415,7 @@ func PeerListCmd() *cobra.Command {
 				}
 				var secret string
 				if len(p.Status.SecretValue) > 0 {
-					prefixSecret := p.Status.SecretValue[0:5]
-					suffixSecret := p.Status.SecretValue[len(p.Status.SecretValue)-10 : len(p.Status.SecretValue)]
-					secret = fmt.Sprintf("%s...%s", prefixSecret, suffixSecret)
+					secret = "REDACTED"
 				}
 				ipaddr := p.Spec.AllowedIPs
 				var expin string

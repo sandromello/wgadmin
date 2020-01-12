@@ -1,0 +1,14 @@
+name: ${server_name}
+bucketName: ${bucket_name}
+server:
+  unitName: ${server_unit_name}
+  systemdPath: ${systemd_path}
+  syncTime: ${server_sync_time}
+  configPath: ${config_path}
+  configFile: ${config_file}
+  cipherKey: ${cipher_key}
+peer:
+  unitName: ${peer_unit_name}
+  systemdPath: ${systemd_path}
+  syncTime: ${peer_sync_time}
+  interfaceName: ${interface_name}
