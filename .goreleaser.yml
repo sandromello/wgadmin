@@ -1,6 +1,5 @@
 env:
   - GO111MODULE=on
-  - GOPROXY=https://gocenter.io
 before:
   hooks:
   - go mod tidy
@@ -20,12 +19,18 @@ builds:
   - -X github.com/sandromello/wgadmin/pkg/version.gitCommit={{ .Commit }}
   - -X github.com/sandromello/wgadmin/pkg/version.buildDate={{ .Date }}
 archives:
-  - name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+  - name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}'
     replacements:
       darwin: Darwin
       linux: Linux
       windows: Windows
       amd64: x86_64
+dockers:
+  - dockerfile: Dockerfile
+    binaries:
+    - wgadmin
+    image_templates:
+      - "sandromello/wgadmin:{{ .Tag }}"
 checksum:
   name_template: 'checksums.txt'
 changelog:
