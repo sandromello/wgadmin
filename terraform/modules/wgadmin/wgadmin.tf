@@ -8,5 +8,6 @@ data "template_file" "install" {
     wgadmin_version          = var.wgadmin_version
     wgadmin_version_checksum = var.wgadmin_version_checksum
     wgadmin_config           = var.wgadmin_config
+    wireguard_ubuntu_version = var.wireguard_ubuntu_version
   }
 }

@@ -18,6 +18,10 @@ variable "wgadmin_version_checksum" {
   description = "The wgadmin version checksum"
 }
 
+variable "wireguard_ubuntu_version" {
+  description = "The wireguard version of ubuntu, see the list at: https://launchpad.net/~wireguard/+archive/ubuntu/wireguard"
+}
+
 variable "wgadmin_config" {
   description = "The path to the wgadmin configuration file"
 }

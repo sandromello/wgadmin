@@ -4,6 +4,10 @@ locals {
   wgadmin_releases_url = "https://github.com/sandromello/wgadmin/releases/download"
 }
 
+variable "wireguard_ubuntu_version" {
+  description = "The wireguard version of ubuntu, see the list at: https://launchpad.net/~wireguard/+archive/ubuntu/wireguard"
+}
+
 variable "wireguard_server_name" {
   description = "The name of the wireguard server"
 }
@@ -14,12 +18,12 @@ variable "gcs_bucket_name" {
 
 variable "server_sync_time" {
   description = "The period in time which the server will be synced"
-  default     = "5m"
+  default     = "2m"
 }
 
 variable "peer_sync_time" {
   description = "The period in time which the peers will be synced"
-  default     = "5m"
+  default     = "2m"
 }
 
 variable "cipher_key" {
@@ -54,6 +58,7 @@ module "wgadmin" {
   wgadmin_version          = var.wgadmin_release.version
   wgadmin_version_checksum = var.wgadmin_release.checksum
   wgadmin_config           = module.configuration.configuration
+  wireguard_ubuntu_version = var.wireguard_ubuntu_version
 }
 
 output "install_script" {
