@@ -26,11 +26,7 @@ archives:
       windows: Windows
       amd64: x86_64
 dockers:
-  - build_flag_templates:
-      - "--build-arg=VERSION={{ .Version }}"
-      - "--build-arg=COMMIT={{ .Commit }}"
-      - "--build-arg=DATE={{ .Date }}"
-    dockerfile: Dockerfile
+  - dockerfile: Dockerfile
     binaries:
     - wgadmin
     image_templates:
