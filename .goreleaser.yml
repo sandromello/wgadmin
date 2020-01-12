@@ -26,6 +26,14 @@ archives:
       linux: Linux
       windows: Windows
       amd64: x86_64
+dockers:
+  - build_flag_templates:
+      - "--build-arg=VERSION={{ .Version }}"
+      - "--build-arg=COMMIT={{ .Commit }}"
+      - "--build-arg=DATE={{ .Date }}"
+    dockerfile: Dockerfile
+    image_templates:
+      - "sandromello/wgadmin:{{ .Tag }}"
 checksum:
   name_template: 'checksums.txt'
 changelog:
