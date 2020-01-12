@@ -9,7 +9,7 @@ DOCKER_REGISTRY ?= quay.io/
 IMAGE_PREFIX ?= sandromello
 IMAGE := ${DOCKER_REGISTRY}${IMAGE_PREFIX}/${SHORT_NAME}:${VERSION}
 
-BINARY_DEST_DIR := rootfs/usr/local/bin
+BINARY_DEST_DIR := dist
 
 GOOS ?= linux
 GOARCH ?= amd64
@@ -29,4 +29,4 @@ publish:
 
 build:
 	mkdir -p ${BINARY_DEST_DIR}
-	env GOOS=${GOOS} GOARCH=${GOARCH} go build -ldflags ${LDFLAGS} -o rootfs/usr/local/bin/wgadmin cmd/main.go
+	env GOOS=${GOOS} GOARCH=${GOARCH} go build -ldflags ${LDFLAGS} -o dist/wgadmin cmd/main.go
