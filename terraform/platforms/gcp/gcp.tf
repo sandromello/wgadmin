@@ -58,17 +58,15 @@ resource "google_compute_firewall" "wireguard-server" {
   network = google_compute_network.default.name
   project = google_project.wgadmin.project_id
 
-  allow {
-    protocol = "udp"
-    ports    = ["51820"]
+  dynamic "allow" {
+    for_each = var.gcp_firewall_rules
+    content {
+      protocol = allow.value.protocol
+      ports    = allow.value.ports
+    }
   }
 
-  allow {
-    protocol = "tcp"
-    ports    = ["22"]
-  }
-
-  source_ranges = ["0.0.0.0/0"]
+  source_ranges = var.gcp_firewall_source_ranges
 }
 
 resource "google_compute_address" "static-ip" {
