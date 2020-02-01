@@ -52,3 +52,20 @@ variable "gcp_network_tier" {
   description = "The network tier config"
   default     = "PREMIUM"
 }
+
+variable "gcp_firewall_rules" {
+  description = "The firewall ports/protocol to open for the wireguard instances"
+  type = set(object({
+    protocol = string
+    ports    = list(string)
+  }))
+  default = [{
+    protocol = "udp",
+    ports    = ["51820"],
+  }]
+}
+
+variable "gcp_firewall_source_ranges" {
+  description = "Which CIDR to apply firewall rules"
+  default     = ["0.0.0.0/0"]
+}
