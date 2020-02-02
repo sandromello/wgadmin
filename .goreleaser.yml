@@ -31,6 +31,8 @@ dockers:
     - wgadmin
     image_templates:
       - "sandromello/wgadmin:{{ .Tag }}"
+    extra_files:
+      - web
 checksum:
   name_template: 'checksums.txt'
 changelog:

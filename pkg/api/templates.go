@@ -16,7 +16,7 @@ var templateWireguardClientConfig = []byte(`[Interface]
 PrivateKey = {{ .PrivateKey.String }}
 Address    = {{ .Address }}
 DNS        = {{ .DNS }}
-MTU        = 1360
+MTU        = {{ .MTU }}
 
 [Peer]
 PublicKey           = {{ .PublicKey }}

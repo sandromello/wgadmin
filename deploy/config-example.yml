@@ -1,0 +1,29 @@
+# daemon config example
+name: wg-testing
+bucketName: wireguard
+server:
+  unitName: wgadmin-server.service
+  systemdPath: /etc/systemd/system
+  syncTime: 1m
+  configPath: /etc/wireguard
+  configFile: wg0.conf
+  cipherKey: null
+peer:
+  unitName: wgadmin-peer.service
+  systemdPath: /etc/systemd/system
+  syncTime: 1m
+  interfaceName: wg0
+---
+# webapp config example
+httpPort: '8000'
+allowedDomains:
+- acme.tld
+- gmail.com
+pageConfig:
+  faviconURL: null
+  googleClientID: <google-client-id>
+  googleRedirectURI: https://yourdomain.tld
+tlsKeyFile: /etc/ssl/custom-certs/tls-cert-key.pem
+tlsCertFile: /etc/ssl/custom-certs/tls-cert.pem
+googleApplicationCredentials: /var/run/secrets/google/serviceaccount
+gcsBucketName: wgadmin-foo

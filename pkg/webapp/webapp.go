@@ -30,16 +30,16 @@ const (
 )
 
 // PageConfig is used to configure the content of the webapp
-type PageConfig struct {
-	FaviconURL        string
-	LogoURL           string
-	ThemeCSSURL       string
-	GoogleClientID    string
-	GoogleRedirectURI string
-	TemplatePath      string
-	Title             string
-	NavBarLink        string
-}
+// type PageConfig struct {
+// 	FaviconURL        string
+// 	LogoURL           string
+// 	ThemeCSSURL       string
+// 	GoogleClientID    string
+// 	GoogleRedirectURI string
+// 	TemplatePath      string
+// 	Title             string
+// 	NavBarLink        string
+// }
 
 // UserInfo represents an Google user
 type UserInfo struct {
@@ -77,12 +77,12 @@ func UnmarshalUserInfo(data []byte) *UserInfo {
 type Handler struct {
 	tmpl           *template.Template
 	store          *sessions.CookieStore
-	pageConfig     *PageConfig
+	pageConfig     *api.PageConfig
 	allowedDomains []string
 }
 
 // NewHandler creates a new handler
-func NewHandler(sessionKey []byte, pconfig *PageConfig, allowedDomains []string) *Handler {
+func NewHandler(sessionKey []byte, pconfig *api.PageConfig, allowedDomains []string) *Handler {
 	if pconfig == nil {
 		log.Fatal("page config attribute is nil")
 	}
@@ -398,6 +398,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			"DNS":        "1.1.1.1, 8.8.8.8",
 			"Endpoint":   wgsc.PublicEndpoint,
 			"AllowedIPs": "0.0.0.0/0, ::/0",
+			"MTU":        peer.Spec.ClientMTU,
 		})
 		if err != nil {
 			h.httpError(w, err.Error(), http.StatusInternalServerError)
