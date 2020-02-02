@@ -329,7 +329,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := client.SyncRemote(); err != nil {
-			msg := fmt.Sprintf("Error: failed syncing peer %v: %v", peer.UID, err)
+			msg := fmt.Sprintf("Error: failed syncing with GCS: %v", err)
 			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
@@ -395,7 +395,10 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
-
+		peerMTU := api.PeerDefaultMTU
+		if peer.Spec.ClientMTU != "" {
+			peerMTU = peer.Spec.ClientMTU
+		}
 		data, err := api.ParseWireguardClientConfigTemplate(map[string]interface{}{
 			"PrivateKey": clientPrivkey,
 			"PublicKey":  wgsc.PublicKey.String(),
@@ -403,7 +406,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			"DNS":        "1.1.1.1, 8.8.8.8",
 			"Endpoint":   wgsc.PublicEndpoint,
 			"AllowedIPs": "0.0.0.0/0, ::/0",
-			"MTU":        peer.Spec.ClientMTU,
+			"MTU":        peerMTU,
 		})
 		if err != nil {
 			h.httpError(w, err.Error(), http.StatusInternalServerError)
