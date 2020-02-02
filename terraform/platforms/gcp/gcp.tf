@@ -85,6 +85,20 @@ resource "google_compute_subnetwork" "subnetwork" {
   project                  = google_project.wgadmin.project_id
 }
 
+resource "google_storage_bucket" "database" {
+  count    = var.gcs_create_bucket ? 1 : 0
+  name     = var.gcs_bucket_name
+  project  = google_project.wgadmin.project_id
+
+  location      = var.gcs_bucket_location
+  storage_class = var.gcs_bucket_storage_class
+  force_destroy = var.gcs_bucket_force_destroy
+
+  versioning {
+    enabled = var.gcs_bucket_versioning
+  }
+}
+
 resource "google_compute_instance" "default" {
   name         = "wgadmin"
   machine_type = var.gcp_machine_type
