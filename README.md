@@ -4,17 +4,9 @@
 
 Wireguard Admin allows managing servers and peers easily.
 
-## Terraform Bootstrap
+# Terraform Bootstrap
 
-```terraform
-module "wgadmin" {
-
-}
-```
-
-```bash
-TF_VAR_cipher_key=$(wgadmin server new-cipher-key) terraform apply
-```
+Check the instruction in [./terraform/platforms/gcp/README.md](./terraform/platforms/gcp/README.md)
 
 # Configure the WebApp
 
