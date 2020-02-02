@@ -238,7 +238,7 @@ func PeerAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&O.Peer.ExpireAction, "expire-action", string(api.PeerExpireActionDefault), "The action to perform when expiring peers: block|reset.")
 	cmd.Flags().StringVar(&O.Peer.ExpireDuration, "expire-in", "24h", "The duration for auto expiring or locking the peer.")
 	cmd.Flags().StringVar(&O.Peer.PersistentPublicKey, "public-key", "", "The public key to add to the peer, this key will never expire.")
-	cmd.Flags().StringVar(&O.Peer.MTU, "mtu", "1280", "The MTU of the client config.")
+	cmd.Flags().StringVar(&O.Peer.MTU, "mtu", api.PeerDefaultMTU, "The MTU of the client config.")
 	cmd.Flags().BoolVar(&O.Peer.ClientConfig, "client-config", false, "Generate a wireguard client config, this public key will never expire.")
 	cmd.Flags().BoolVar(&O.Peer.Override, "override", false, "Override the configured peer, it will reset the current configuration.")
 	return cmd

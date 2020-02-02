@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const PeerDefaultMTU string = "1280"
+
 // WebApp holds information about the webapp server
 type WebApp struct {
 	HTTPPort                     string      `json:"httpPort"`
