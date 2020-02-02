@@ -45,6 +45,8 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 
 > **WARNING:** Make sure to run the server with TLS!
 
+## Deploy the WebApp
+
 ```bash
 NAMESPACE=wgadmin
 GCS_BUCKET_NAME=
