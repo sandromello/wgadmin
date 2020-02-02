@@ -69,3 +69,28 @@ variable "gcp_firewall_source_ranges" {
   description = "Which CIDR to apply firewall rules"
   default     = ["0.0.0.0/0"]
 }
+
+variable "gcs_create_bucket" {
+  description = "Creates a bucket to store the wgadmin database."
+  default     = false
+}
+
+variable "gcs_bucket_location" {
+  description = "The location of the bucket"
+  default     = "US"
+}
+
+variable "gcs_bucket_storage_class" {
+  description = "The Storage Class of the new bucket. Supported values: STANDARD|MULTI_REGIONAL|REGIONAL|NEARLINE|COLDLINE"
+  default     = "STANDARD"
+}
+
+variable "gcs_bucket_force_destroy" {
+  description = "When deleting a bucket, this boolean option will delete all contained objects. If you try to delete a bucket that contains objects, Terraform will fail that run."
+  default     = false
+}
+
+variable "gcs_bucket_versioning" {
+  description = "While set to true, versioning is fully enabled for this bucket"
+  default     = false
+}
