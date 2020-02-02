@@ -1,4 +1,4 @@
-# daemon config
+# daemon config example
 name: wg-testing
 bucketName: wireguard
 server:
@@ -14,7 +14,7 @@ peer:
   syncTime: 1m
   interfaceName: wg0
 ---
-# webapp config
+# webapp config example
 httpPort: '8000'
 allowedDomains:
 - acme.tld

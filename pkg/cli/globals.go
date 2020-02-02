@@ -29,6 +29,7 @@ type CmdPeer struct {
 	ExpireAction        string
 	ExpireDuration      string
 	PersistentPublicKey string
+	MTU                 string
 	ClientConfig        bool
 	Override            bool
 	Filename            string

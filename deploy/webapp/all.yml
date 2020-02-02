@@ -28,7 +28,7 @@ spec:
     spec:
       containers:
       - name: wgadm
-        image: sandromello/wgadmin:v0.0.5-dev
+        image: sandromello/wgadmin:v0.0.5-alpha
         imagePullPolicy: Always
         args:
         - run-server

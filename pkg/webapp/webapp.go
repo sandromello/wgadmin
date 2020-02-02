@@ -398,6 +398,7 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			"DNS":        "1.1.1.1, 8.8.8.8",
 			"Endpoint":   wgsc.PublicEndpoint,
 			"AllowedIPs": "0.0.0.0/0, ::/0",
+			"MTU":        peer.Spec.ClientMTU,
 		})
 		if err != nil {
 			h.httpError(w, err.Error(), http.StatusInternalServerError)

@@ -6,26 +6,57 @@ Wireguard Admin allows managing servers and peers easily.
 
 ## Terraform Bootstrap
 
-TODO
+```terraform
+module "wgadmin" {
 
-## Configure Authentication
+}
+```
 
-You'll need to configure a Oauth Client ID in order to run the admin webapp. If you already have a project follow the steps below to get all the necessary credentials to run the webapp:
+```bash
+TF_VAR_cipher_key=$(wgadmin server new-cipher-key) terraform apply
+```
 
-1. Go to https://console.cloud.google.com/apis/credentials?project=<YOUR_PROJECT>
-2. Create an Oauth Client ID credential
-3. Choose "Web Application" and set a name for it
-4. Add authorized redirect URI and Origin to your root domain name, example: https://acme.tld
+# Configure the WebApp
+
+You'll need to configure a Oauth Client ID in order to run the admin webapp. If you already have a project follow the steps below to get all the necessary credentials to run the webapp.
+
+## Configure the Oauth Consent Screen
+
+1. Go to https://console.cloud.google.com/apis/credentials/consent?createClient=&project=<project_id>
+2. Select `External` User Type and click on create
+3. On Oauth consent screen, select `Public` Application Type
+4. Choose an Application Name
+5. Put the domain name which will host the wgadmin webapp
+
+## Add an Oauth Client ID
+
+1. Go to https://console.cloud.google.com/apis/credentials?project=<project_id>
+2. Click New Credentials, then select OAuth client ID.
+3. Select Web Application and fill the name of the app
+4. Add the origin and redirect uri using the same address
+5. Save it and copy the client id and the client secret
+
+## Create an service account
+
+```bash
+SERVICEACCOUNT=wgadmin
+PROJECT_ID=system-vpn-d1da18
+gcloud iam service-accounts create $SERVICEACCOUNT \
+    --description "Wgadmin Webapp" \
+    --display-name "wgadmin webapp" \
+    --project $PROJECT_ID
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member serviceAccount:$SERVICEACCOUNT@$PROJECT_ID.iam.gserviceaccount.com \
+  --role roles/storage.admin \
+  --project $PROJECT_ID
+```
 
 > **WARNING:** Make sure to run the server with TLS!
 
 ```bash
 NAMESPACE=wgadmin
-PROJECT_ID=wgadmin-$(openssl rand -hex 3)
-GCS_BUCKET_NAME=$PROJECT_ID
+GCS_BUCKET_NAME=
 GOOGLE_CLIENT_ID=
-# Create a GCS bucket
-# gsutil mb -p $PROJECT_ID -c nearline gs://$GCS_BUCKET_NAME
 kubectl create ns $NAMESPACE
 kubectl create secret -n $NAMESPACE generic tls-ssl-wgadm \
     --from-file=tls-cert=path/to/tls-cert.pem \
@@ -52,10 +83,9 @@ kubectl create secret -n $NAMESPACE generic webapp-config --from-file=config.yam
 kubectl apply -f deploy/webapp/all.yml
 ```
 
-
-References:
+### References
 - https://cloud.google.com/docs/authentication/?hl=en_US&_ga=2.221194456.-1500110320.1555950221
-
-https://console.cloud.google.com/apis/credentials?project=system-vpn-a
-
-> **Note:** This is a working project, come back later.
+- https://support.google.com/googleapi/answer/6158849?hl=en&ref_topic=7013279
+- https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-gcloud
+- https://cloud.google.com/iam/docs/granting-roles-to-service-accounts#granting_access_to_a_service_account_for_a_resource
+- https://cloud.google.com/iam/docs/creating-managing-service-account-keys

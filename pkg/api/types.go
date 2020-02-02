@@ -141,6 +141,7 @@ type PeerSpec struct {
 	AllowedIPs          string               `json:"allowedIPs"`
 	ExpireAction        PeerExpireActionType `json:"expireAction"`
 	ExpireDuration      string               `json:"expireDuration"`
+	ClientMTU           string               `json:"clientMTU"`
 	Blocked             bool                 `json:"blocked"`
 }
 
