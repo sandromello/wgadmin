@@ -28,6 +28,7 @@ variable "gcp_activate_apis" {
   description = "A list of apis to activate, execute 'gcloud services list' to see the list of API's"
   default     = [
     "compute.googleapis.com",
+    "storage-api.googleapis.com"
   ]
 }
 

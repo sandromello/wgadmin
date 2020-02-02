@@ -63,7 +63,7 @@ func (c *coreClient) SyncRemote() error {
 	d := time.Now().Add(10 * time.Second)
 	ctx, cancel := context.WithDeadline(context.Background(), d)
 	defer cancel()
-	creds, err := google.FindDefaultCredentials(ctx, storage.ScopeReadOnly)
+	creds, err := google.FindDefaultCredentials(ctx, storage.ScopeReadWrite)
 	if err != nil {
 		log.Fatal(err)
 	}

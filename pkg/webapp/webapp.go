@@ -271,7 +271,8 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 	configPath := filepath.Join(os.Getenv("$HOME/.wgapp/"), store.DBFileName)
 	client, err := storeclient.New(configPath, &bolt.Options{OpenFile: storeclient.FetchFromGCS})
 	if err != nil {
-		h.httpError(w, err.Error(), http.StatusInternalServerError)
+		msg := fmt.Sprintf("Error: failed creating client config: %v", err)
+		h.httpError(w, msg, http.StatusInternalServerError)
 		return
 	}
 	defer client.Close()
@@ -282,7 +283,8 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 		peerUID := r.FormValue("peer_uid")
 		peer, err := client.Peer().Get(peerUID)
 		if err != nil {
-			h.httpError(w, err.Error(), http.StatusInternalServerError)
+			msg := fmt.Sprintf("Error: failed fetching peer %v: %v", peerUID, err)
+			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
 		if peer == nil {
@@ -322,11 +324,13 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 			PublicKey:   nil,
 		}
 		if err := client.Peer().Update(peer); err != nil {
-			h.httpError(w, err.Error(), http.StatusInternalServerError)
+			msg := fmt.Sprintf("Error: failed updating peer %v: %v", peer.UID, err)
+			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
 		if err := client.SyncRemote(); err != nil {
-			h.httpError(w, err.Error(), http.StatusInternalServerError)
+			msg := fmt.Sprintf("Error: failed syncing peer %v: %v", peer.UID, err)
+			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
 		redirectURL := fmt.Sprintf("/peers/%s?vpn=%s", peer.Status.SecretValue, peer.GetServer())
@@ -334,7 +338,8 @@ func (h *Handler) Peers(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		peerList, err := client.Peer().List()
 		if err != nil {
-			h.httpError(w, err.Error(), http.StatusInternalServerError)
+			msg := fmt.Sprintf("Error: failed listing peers: %v", err)
+			h.httpError(w, msg, http.StatusInternalServerError)
 			return
 		}
 		var peer *api.Peer
