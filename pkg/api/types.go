@@ -88,7 +88,7 @@ type PeerPhase string
 const (
 	// PeerPending indicates that the peer is registered
 	// and awaiting for download.
-	PeerPending PeerPhase = "pending"
+	PeerPending PeerPhase = "pending download"
 	// PeerBlocked indicates that the peer is unable to download
 	// a configuration or establish connection with the server.
 	PeerBlocked PeerPhase = "blocked"
